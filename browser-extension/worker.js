@@ -127,7 +127,7 @@ globalThis.openBrowserShow = async function () {
 };
 
 const newtabMethods = new Set(['listWorkspaces', 'listAgentHistory']);
-const methods = new Set(['listUploads','grantUpload','revokeUpload','respondDialog','listDownloads','cancelDownload','keepDownload','visualStatus','diagnoseOperation', 'listWorkspaces', 'getWorkspace', 'takeControl', 'returnToAgent', 'grantOrigin', 'resolveCredential', 'finishWorkspace']);
+const methods = new Set(['listUploads','grantUpload','revokeUpload','respondDialog','listDownloads','cancelDownload','keepDownload','visualStatus','listOperations','listEvents', 'listWorkspaces', 'getWorkspace', 'takeControl', 'returnToAgent', 'grantOrigin', 'resolveCredential', 'finishWorkspace']);
 const pending = new Map();
 const queued = [];
 let waiting;

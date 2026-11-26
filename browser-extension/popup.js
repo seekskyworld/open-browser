@@ -1,7 +1,7 @@
 'use strict';
 
 const el = id => document.getElementById(id);
-let selected = '', detail, request, selectedTab = '', revision = 0, busy = false, refreshing = false;
+let selected = '', detail, request, selectedTab = '', revision = 0, busy = false, refreshing = false, contextTab = false;
 const phases = globalThis.openBrowserPhaseLabels;
 
 async function call(method, params = {}) {
@@ -87,30 +87,33 @@ function clearDiagnostic() {
   if (link.hasAttribute('href')) URL.revokeObjectURL(link.href);
   link.removeAttribute('href');
   link.hidden = true;
-  el('diagnostic-data').textContent = '';
 }
-el('diagnostic-operation').oninput = clearDiagnostic;
-el('diagnostic-preview').onclick = () => perform(async () => {
+el('diagnostic-export-button').onclick = () => perform(async () => {
   clearDiagnostic();
-  const workspaceId = selected, operationId = el('diagnostic-operation').value;
-  const data = await call('diagnoseOperation', {workspaceId, operationId});
-  if (workspaceId !== selected || operationId !== el('diagnostic-operation').value) return;
-  const text = JSON.stringify(data, null, 2);
-  el('diagnostic-data').textContent = text;
+  const workspaceId = selected;
+  const [operations, events] = await Promise.all([
+    call('listOperations', {workspaceId, after: 0, limit: 100}),
+    call('listEvents', {workspaceId, after: 0, limit: 100}),
+  ]);
+  const text = JSON.stringify({ version: 1, workspaceId, exportedAt: new Date().toISOString(),
+    operations: (operations.operations || []).filter(item => item.error || ['failed', 'outcome_unknown', 'cancelled'].includes(item.state)),
+    events: events.events || [] }, null, 2) + '\n';
   const link = el('diagnostic-export');
   link.href = URL.createObjectURL(new Blob([text], {type:'application/json'}));
   link.hidden = false;
+  link.textContent = '下载错误日志';
+  link.click();
 });
 
 function render(w) {
   if (detail?.workspaceId !== w?.workspaceId) {
     clearDiagnostic();
-    el('diagnostic-operation').value = '';
   }
 
   detail = w;
   el('workspace').hidden = !w;
   el('empty').hidden = !!w;
+  el('context-selection').hidden = contextTab || !w;
   el('status').textContent = w ? describe(w) + ' · 资料 ' + w.profileId : '暂无工作区';
   if (!w) { showCredential(null); return; }
   renderDialogs(w);
@@ -130,7 +133,7 @@ async function sync() {
   refreshing = true;
   const serial = revision;
   try {
-    const list = await call('listWorkspaces');
+    const list = contextTab ? (selected ? [await call('getWorkspace', {workspaceId: selected })] : []) : await call('listWorkspaces');
     if (serial !== revision) return;
     if (!list.some(w => w.workspaceId === selected)) {
       selected = (list.find(w => w.activity?.needsCredential) || list[0])?.workspaceId || '';
@@ -143,7 +146,7 @@ async function sync() {
       return [w.workspaceId, title + suffix + ' · ' + describe(w)];
     });
     options(el('workspaces'), entries, selected);
-    const w = selected ? await call('getWorkspace', { workspaceId: selected }) : null;
+    const w = contextTab ? list[0] || null : selected ? await call('getWorkspace', { workspaceId: selected }) : null;
     const [captureReply, downloads, uploads] = w ? await Promise.all([
       call('visualStatus',{workspaceId:selected}).catch(()=>({})),
       call('listDownloads',{workspaceId:selected}),
@@ -309,6 +312,7 @@ async function open() {
   if (Number.isInteger(tabId)) {
     const key = 'tab:' + tabId;
     const owned = (await chrome.storage.session.get(key))[key];
+    contextTab = Boolean(owned);
     if (owned) { selected = owned.workspaceId; selectedTab = owned.pageId; }
   }
   await sync();

@@ -15,8 +15,10 @@
 <main>
 <p id="empty" hidden>当前没有活动任务。新标签页会显示 Agent 控制台。</p>
 <section id="workspace" hidden>
+<div id="context-selection" hidden>
 <label for="workspaces">工作区</label><select id="workspaces"></select>
 <label for="pages">标签页</label><select id="pages"></select>
+</div>
 <div class="action"><button id="control" type="button"></button></div>
 <div id="dialogs"></div>
 <div id="blocked"></div>
@@ -24,10 +26,10 @@
 <input id="upload-file" type="file"><div id="upload-list"></div></details>
 <details id="downloads" hidden><summary>任务下载</summary><div id="download-list"></div></details>
 <p id="visual-status" hidden></p>
-<details><summary>操作诊断</summary>
-<label for="diagnostic-operation">操作 ID</label><input id="diagnostic-operation" autocomplete="off">
-<button id="diagnostic-preview" type="button" class="secondary">预览脱敏报告</button>
-<pre id="diagnostic-data"></pre><a id="diagnostic-export" download="open-browser-diagnostic.json" hidden>保存预览内容</a>
+<details><summary>导出错误日志</summary>
+<p>导出当前任务的脱敏失败记录，便于排查问题。</p>
+<button id="diagnostic-export-button" type="button" class="secondary">导出错误日志</button>
+<a id="diagnostic-export" download="open-browser-error-log.json" hidden>下载错误日志</a>
 </details>
 <details id="delivery"><summary>结束任务</summary>
 <p>勾选要留给自己的标签，其余任务标签将关闭。</p>
