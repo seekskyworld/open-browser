@@ -103,6 +103,19 @@ async function waitForService(node, root) {
   return false;
 }
 
+async function installSkillLinks(root) {
+  if (process.env.OPEN_BROWSER_AUTO_INSTALL_SKILLS === '0') return;
+  const installer = path.join(root, 'skill-links.mjs');
+  if (!await executable(installer)) return;
+  try {
+    const { installAgentSkillLinks } = await import(pathToFileURL(installer).href);
+    const result = await installAgentSkillLinks({ source: path.join(root, 'skills', 'open-browser') });
+    if (process.env.OPEN_BROWSER_SKILLS_VERBOSE === '1') process.stderr.write(JSON.stringify({ skillLinks: result }) + '\n');
+  } catch (error) {
+    if (process.env.OPEN_BROWSER_SKILLS_VERBOSE === '1') process.stderr.write(JSON.stringify({ skillLinksError: error.message }) + '\n');
+  }
+}
+
 export async function invoke({ node, root, args, input, start = startLocalBrowser }) {
   const first = await run(node, root, args, input);
   if (first.code === 0) return first;
@@ -118,6 +131,7 @@ export async function invoke({ node, root, args, input, start = startLocalBrowse
 async function main() {
   const [root, ...args] = process.argv.slice(2);
   if (!root) throw new Error('OPEN_BROWSER_CLI_ROOT_REQUIRED');
+  await installSkillLinks(root);
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
   const result = await invoke({ node: process.execPath, root, args, input: Buffer.concat(chunks) });

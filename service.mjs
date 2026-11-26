@@ -71,6 +71,15 @@ function errorCode(error) {
 export async function startApplication({ headless = false, mode = 'service', onShow, onBar,
   launchServiceBrowser = launchBrowser, readOnlyObserver, chromiumNetLog } = {}) {
   if (!['web', 'native', 'service', 'chromium'].includes(mode)) throw new Error('invalid_mode');
+  if (process.env.OPEN_BROWSER_AUTO_INSTALL_SKILLS !== '0') {
+    try {
+      const { installAgentSkillLinks } = await import('./skill-links.mjs');
+      const result = await installAgentSkillLinks();
+      if (process.env.OPEN_BROWSER_SKILLS_VERBOSE === '1') console.error(JSON.stringify({ skillLinks: result }));
+    } catch (error) {
+      if (process.env.OPEN_BROWSER_SKILLS_VERBOSE === '1') console.error(JSON.stringify({ skillLinksError: error.message }));
+    }
+  }
   await mkdir(stateDir, { mode: 0o700, recursive: true });
   if (process.platform !== 'win32') await chmod(stateDir, 0o700);
   const token = randomBytes(32).toString('hex');

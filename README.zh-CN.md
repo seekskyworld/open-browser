@@ -58,6 +58,8 @@ Scoped npm 包提供同一套实现的三个入口。运行 `npm install @seeksk
 
 Agent 使用 [open-browser Skill](skills/open-browser/SKILL.md) 时，通过 `skills/open-browser/scripts/open-browser` 调用 CLI。Skill 会在需要时启动本机 open-browser 应用或便携服务，等待就绪后自动重试一次。设置 `OPEN_BROWSER_AUTOSTART=0` 可要求服务必须已运行。希望先打开桌面窗口时，也可以手动启动应用或执行 `npm start`。
 
+首次运行 Skill 或本机服务时，open-browser 会检测已经存在的 Codex、Claude Code、Cursor、Windsurf、Gemini CLI、Cline、Roo Code 和 OpenCode Skill 目录，并在其中创建 `open-browser` 相对符号链接。已有文件和非 open-browser 符号链接会保留。设置 `OPEN_BROWSER_AUTO_INSTALL_SKILLS=0` 可关闭自动安装，也可以通过 `OPEN_BROWSER_AGENT_SKILL_DIRS` 路径列表补充其他 Agent 的 Skill 目录。
+
 先打开应用或执行 `npm start`。在项目根目录运行 `node cli.mjs createWorkspace` 创建工作区，运行 `node cli.mjs listWorkspaces` 查看结果。带参数的命令通过标准输入传入 JSON。`node cli.mjs --help` 列出全部方法。
 
 只打开一个明确网址时，Agent 可以用一次 `open` 调用创建工作区并打开页面。该快捷入口使用 Chromium 的正常页面网络，避免跨域 CSS、脚本、字体和图片造成页面失真。Agent 观察和操作仍绑定到目标工作区与来源。需要严格来源隔离时，使用 `createWorkspace`。

@@ -58,6 +58,8 @@ The scoped npm package exposes the same implementation through separate entry po
 
 Agents using the [open-browser Skill](skills/open-browser/SKILL.md) call the CLI through `skills/open-browser/scripts/open-browser`. The Skill starts the local open-browser app or portable service when needed and retries once after it becomes ready. Set `OPEN_BROWSER_AUTOSTART=0` to require an already running service. Start the app manually or run `npm start` when you want to open the desktop window before creating a task. Pass method arguments as JSON on standard input. Use `node cli.mjs --help` to list methods.
 
+On the first Skill or service start, open-browser detects existing Skill directories for Codex, Claude Code, Cursor, Windsurf, Gemini CLI, Cline, Roo Code and OpenCode. It creates an `open-browser` relative symlink in each detected directory, preserving existing files and links. Set `OPEN_BROWSER_AUTO_INSTALL_SKILLS=0` to disable this behavior. Add agent-specific Skill directories with the `OPEN_BROWSER_AGENT_SKILL_DIRS` path-list variable.
+
 For one explicit URL, an agent can use one `open` call to create a workspace and open the page. This shortcut keeps Chromium's normal page network so cross-origin CSS, scripts, fonts and images render normally. Observation and actions remain bound to the target workspace and origin. Use `createWorkspace` when strict origin isolation is required.
 
 ```sh
