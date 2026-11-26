@@ -1,4 +1,49 @@
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const entitlements = process.env.OPEN_BROWSER_MACOS_ENTITLEMENTS ||
+  fileURLToPath(new URL('./macos-entitlements.plist', import.meta.url));
+
+function nestedCodePaths(bundle) {
+  const files = execFileSync('/usr/bin/find', [bundle, '-type', 'f', '-print0']);
+  const candidates = files.toString('utf8').split('\0').filter(Boolean);
+  const machO = candidates.filter(file => {
+    try {
+      return execFileSync('/usr/bin/file', ['-b', file], { encoding: 'utf8' }).includes('Mach-O');
+    } catch {
+      return false;
+    }
+  });
+  const bundles = new Set();
+  for (const file of machO) {
+    let current = file;
+    while (current.startsWith(bundle + '/') && current !== bundle) {
+      if (/\.(app|framework|xpc|bundle)$/.test(current)) bundles.add(current);
+      current = current.slice(0, current.lastIndexOf('/'));
+    }
+  }
+  return [
+    ...machO.sort((a, b) => b.length - a.length),
+    ...[...bundles].sort((a, b) => b.length - a.length),
+  ];
+}
+
+function signCode(path, identity, preserveEntitlements = false) {
+  const timestamp = process.env.OPEN_BROWSER_CODESIGN_TIMESTAMP === 'none'
+    ? '--timestamp=none'
+    : '--timestamp';
+  const args = ['--force', timestamp, '--options', 'runtime', '--entitlements', entitlements, '--sign', identity];
+  if (preserveEntitlements) args.push('--preserve-metadata=entitlements');
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      execFileSync('/usr/bin/codesign', [...args, path], { stdio: 'inherit' });
+      return;
+    } catch (error) {
+      if (timestamp === '--timestamp=none' || attempt >= 2) throw error;
+      execFileSync('/bin/sleep', ['1']);
+    }
+  }
+}
 
 export function signingIdentity(requested = process.env.OPEN_BROWSER_SIGN_IDENTITY) {
   const listing = execFileSync('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
@@ -13,9 +58,8 @@ export function signingIdentity(requested = process.env.OPEN_BROWSER_SIGN_IDENTI
 }
 
 export function signBundle(bundle, identity, nested = false) {
-  const args = ['--force', '--timestamp=none', '--sign', identity];
-  if (nested) args.push('--deep', '--preserve-metadata=entitlements');
-  execFileSync('/usr/bin/codesign', [...args, bundle], { stdio: 'inherit' });
+  for (const path of nestedCodePaths(bundle)) signCode(path, identity);
+  signCode(bundle, identity, nested);
   execFileSync('/usr/bin/codesign', ['--verify', '--strict', '--deep', bundle], { stdio: 'inherit' });
 }
 

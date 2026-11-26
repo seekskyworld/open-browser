@@ -34,7 +34,7 @@ npm run browser:install
 node --test service.integration.test.mjs
 ```
 
-**打开桌面浏览器**，运行 `npm start`。macOS 首次启动会构建签名应用，需要 Xcode 命令行工具和 Developer ID Application 证书。已有构建时可直接打开 `dist/open-browser.app`，当前构建尚未公证。Windows、Linux 支持从源码启动和 x64 便携包。仅需无头服务时运行 `node service.mjs --headless`。[各平台构建、系统依赖与校验](Docs/跨平台试用与发行.md)
+**打开桌面浏览器**，运行 `npm start`。macOS 首次启动会构建签名应用，需要 Xcode 命令行工具和 Developer ID Application 证书。公开发布 GitHub ZIP 时，配置 notarytool 钥匙串配置或 CI 凭据，运行 `npm run build:release-macos`，再运行 `npm run release:verify-macos`。Windows、Linux 支持从源码启动和 x64 便携包。仅需无头服务时运行 `node service.mjs --headless`。[各平台构建、系统依赖与校验](Docs/跨平台试用与发行.md)
 
 ## 试一次人工接管
 
@@ -102,7 +102,7 @@ MCP 客户端使用 stdio。下面的示例假设已把应用移到 `/Applicatio
 <details>
 <summary>已有资料、macOS 钥匙串与隐私配置</summary>
 
-桌面资料默认保存在 `~/.open-browser/open-browser-profile-v2/`（macOS）或 `~/.open-browser/open-browser-profile/`（Windows、Linux）。站点数据的加密密钥保存在系统钥匙串的 `open-browser Keychain` 项目中。构建机可以通过 `OPEN_BROWSER_SIGN_IDENTITY` 选择签名证书。[构建校验](desktop/brand-keychain.py)
+桌面资料默认保存在 `~/.open-browser/open-browser-profile-v2/`（macOS）或 `~/.open-browser/open-browser-profile/`（Windows、Linux）。站点数据的加密密钥保存在系统钥匙串的 `open-browser Keychain` 项目中。构建机可以通过 `OPEN_BROWSER_SIGN_IDENTITY` 选择签名证书。macOS 公证凭据从 `OPEN_BROWSER_NOTARY_PROFILE` 或 CI 提供的 API Key、Apple ID 变量读取。[构建校验](desktop/brand-keychain.py)
 
 </details>
 

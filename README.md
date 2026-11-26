@@ -34,7 +34,7 @@ To try the control API, run the integration test. It starts a temporary local se
 node --test service.integration.test.mjs
 ```
 
-To open the desktop browser, run `npm start`. The first macOS desktop build requires Xcode command line tools and a Developer ID Application certificate. If you already have a build, open `dist/open-browser.app`. The current macOS build is signed and awaits notarization. Windows and Linux support running from source and x64 portable builds. For a headless service, run `node service.mjs --headless`. [Platform prerequisites and packaging](Docs/跨平台试用与发行.md)
+To open the desktop browser, run `npm start`. The first macOS desktop build requires Xcode command line tools and a Developer ID Application certificate. If you already have a build, open `dist/open-browser.app`. For a public GitHub ZIP, set a notarytool profile or CI credentials and run `npm run build:release-macos`, then run `npm run release:verify-macos`. Windows and Linux support running from source and x64 portable builds. For a headless service, run `node service.mjs --headless`. [Platform prerequisites and packaging](Docs/跨平台试用与发行.md)
 
 ## Try a handoff
 
@@ -100,7 +100,7 @@ Client tokens live under `~/.open-browser/`. Clients connect over a Unix socket 
 <details>
 <summary>Existing profiles, macOS Keychain and privacy settings</summary>
 
-The default desktop profile lives at `~/.open-browser/open-browser-profile-v2/` on macOS and `~/.open-browser/open-browser-profile/` on Windows and Linux. Site-data encryption uses the system Keychain item named `open-browser Keychain`. Builders can select a signing identity with `OPEN_BROWSER_SIGN_IDENTITY`. [Build check](desktop/brand-keychain.py)
+The default desktop profile lives at `~/.open-browser/open-browser-profile-v2/` on macOS and `~/.open-browser/open-browser-profile/` on Windows and Linux. Site-data encryption uses the system Keychain item named `open-browser Keychain`. Builders can select a signing identity with `OPEN_BROWSER_SIGN_IDENTITY`. macOS release credentials are read from `OPEN_BROWSER_NOTARY_PROFILE` or CI-provided API Key and Apple ID variables. [Build check](desktop/brand-keychain.py)
 
 </details>
 

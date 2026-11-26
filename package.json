@@ -35,6 +35,8 @@
   "scripts": {
     "start": "node desktop/start.mjs",
     "build": "node desktop/build.mjs",
+    "build:release-macos": "npm run build && node desktop/notarize-macos.mjs",
+    "release:verify-macos": "node desktop/verify-macos-release.mjs",
     "cli": "node cli.mjs",
     "mcp": "node mcp.mjs",
     "package:check": "npm pack --dry-run",
