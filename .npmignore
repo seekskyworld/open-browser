@@ -9,3 +9,4 @@ experiments/
 **/*.test.mjs
 *.log
 .DS_Store
+Docs/assets/
