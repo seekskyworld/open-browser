@@ -1,0 +1,11 @@
+.git/
+.github/
+.golutra/
+.open-browser/
+Project/
+dist/
+benchmarks/
+experiments/
+**/*.test.mjs
+*.log
+.DS_Store

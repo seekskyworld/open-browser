@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+script_dir=$(CDPATH= cd -P "$(dirname "$0")" && pwd)
+repo=$(CDPATH= cd "$script_dir/../../.." && pwd)
+if [ -x "$repo/../node/bin/node" ] && [ -f "$repo/cli.mjs" ]; then
+  exec "$repo/../node/bin/node" "$repo/skills/open-browser/scripts/bootstrap.mjs" "$repo" "$@"
+fi
+if [ "${OPEN_BROWSER_USE_SOURCE:-0}" = 1 ] && [ -f "$repo/cli.mjs" ]; then
+  exec node "$repo/skills/open-browser/scripts/bootstrap.mjs" "$repo" "$@"
+fi
+for app in "$repo/dist/open-browser.app" "/Applications/open-browser.app"; do
+  resources="$app/Contents/Resources"
+  if [ -x "$resources/node/bin/node" ] && [ -f "$resources/app/cli.mjs" ]; then
+    exec "$resources/node/bin/node" "$resources/app/skills/open-browser/scripts/bootstrap.mjs" "$resources/app" "$@"
+  fi
+done
+if [ -f "$repo/cli.mjs" ]; then
+  exec node "$repo/skills/open-browser/scripts/bootstrap.mjs" "$repo" "$@"
+fi
+printf '%s\n' '未找到 open-browser CLI。请在源码仓库中使用本 Skill，或将 open-browser.app 安装到 /Applications。' >&2
+exit 1

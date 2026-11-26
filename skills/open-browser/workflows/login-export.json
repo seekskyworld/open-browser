@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "origin": "https://example.test",
+  "steps": [
+    {"kind": "fillCredential", "target": {"role": "textbox", "name": "Password"}, "binding": "password"},
+    {"kind": "click", "target": {"role": "button", "name": "Sign in"}},
+    {"kind": "expect", "target": {"role": "link", "name": "Export report"}},
+    {"kind": "click", "target": {"role": "link", "name": "Export report"}}
+  ]
+}

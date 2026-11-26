@@ -1,0 +1,63 @@
+name: Verify source and desktop packages
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: linux-x64
+          - os: windows-2022
+            target: win32-x64
+          - os: macos-15
+            target: macos
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.5'
+          cache: npm
+      - run: npm ci
+      - if: runner.os == 'Linux'
+        run: node node_modules/playwright-core/cli.js install-deps chromium
+      - run: npm run browser:install
+      - if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a env OPEN_BROWSER_HEADED_TESTS=1 npm test
+          node benchmarks/network-compat.mjs 1
+      - if: runner.os != 'Linux'
+        run: node --test --test-concurrency=1 clients.test.mjs control.test.mjs engine-service.test.mjs
+      - if: runner.os == 'macOS'
+        run: xcrun clang -fobjc-arc -framework AppKit -framework CoreGraphics desktop/Launcher.m desktop/OBControlBar.m -o "$RUNNER_TEMP/open-browser-launcher"
+      - if: runner.os == 'Windows'
+        run: node --test --test-concurrency=1 chromium-host.test.mjs extension-front-tab.test.mjs
+      - if: runner.os != 'Linux'
+        run: node --test --test-concurrency=1 lifecycle.test.mjs page-observation.test.mjs site-journeys.test.mjs
+      - if: runner.os != 'macOS'
+        run: node desktop/build-portable.mjs ${{ matrix.target }}
+      - if: runner.os == 'Linux'
+        run: |
+          cd dist
+          sha256sum -c open-browser-linux-x64.tar.gz.sha256
+          tar xzf open-browser-linux-x64.tar.gz
+          open-browser-linux-x64/node/bin/node open-browser-linux-x64/verify.mjs open-browser-linux-x64
+          sudo unshare --net sh -ec 'ip link set lo up; exec sudo -u "$1" env OPEN_BROWSER_QA_APP="$PWD/open-browser-linux-x64/app" ./open-browser-linux-x64/node/bin/node ../benchmarks/privacy-audit.mjs --isolated' sh "$(id -un)"
+          OPEN_BROWSER_QA_APP="$PWD/open-browser-linux-x64/app" open-browser-linux-x64/node/bin/node --test ../delivery.integration.test.mjs
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-Location dist
+          $archive = 'open-browser-win32-x64.zip'
+          $expected = (Get-Content "$archive.sha256").Split(' ')[0]
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $expected) { throw 'Checksum mismatch' }
+          tar -xf $archive
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          .\open-browser-win32-x64\node\node.exe .\open-browser-win32-x64\verify.mjs .\open-browser-win32-x64
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:OPEN_BROWSER_QA_APP = (Resolve-Path .\open-browser-win32-x64\app).Path
+          .\open-browser-win32-x64\node\node.exe --test ..\delivery.integration.test.mjs

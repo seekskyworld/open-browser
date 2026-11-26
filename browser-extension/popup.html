@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>open-browser 工作区</title>
+<link rel="icon" type="image/png" href="icons/open-browser-32.png">
+<link rel="stylesheet" href="popup.css">
+<script defer src="workspace-title.js"></script>
+<script defer src="phase-labels.js"></script>
+<script defer src="popup.js"></script>
+</head>
+<body>
+<header><strong><img src="icons/open-browser-48.png" width="24" height="24" alt="">open-browser</strong><span id="status" role="status">正在连接…</span></header>
+<main>
+<p id="empty" hidden>当前没有活动任务。新标签页会显示 Agent 控制台。</p>
+<section id="workspace" hidden>
+<label for="workspaces">工作区</label><select id="workspaces"></select>
+<label for="pages">标签页</label><select id="pages"></select>
+<div class="action"><button id="control" type="button"></button></div>
+<div id="dialogs"></div>
+<div id="blocked"></div>
+<details id="uploads"><summary>授权上传文件</summary><p id="upload-origin"></p>
+<input id="upload-file" type="file"><div id="upload-list"></div></details>
+<details id="downloads" hidden><summary>任务下载</summary><div id="download-list"></div></details>
+<p id="visual-status" hidden></p>
+<details><summary>操作诊断</summary>
+<label for="diagnostic-operation">操作 ID</label><input id="diagnostic-operation" autocomplete="off">
+<button id="diagnostic-preview" type="button" class="secondary">预览脱敏报告</button>
+<pre id="diagnostic-data"></pre><a id="diagnostic-export" download="open-browser-diagnostic.json" hidden>保存预览内容</a>
+</details>
+<details id="delivery"><summary>结束任务</summary>
+<p>勾选要留给自己的标签，其余任务标签将关闭。</p>
+<div id="keep"></div><button id="finish" type="button">结束</button>
+</details>
+</section>
+<form id="credential" hidden>
+<h2>补充凭据</h2>
+<p id="credential-target"></p>
+<label for="secret">凭据值</label><input id="secret" type="password" autocomplete="off" required>
+<div class="action"><button id="save" type="submit">绑定凭据</button></div>
+</form>
+<p id="notice" role="status" hidden></p>
+</main>
+</body>
+</html>

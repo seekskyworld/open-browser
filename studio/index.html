@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>open-browser · 工作区</title><link rel="icon" type="image/png" href="/open-browser-icon.png"><link rel="stylesheet" href="/studio.css">
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <header class="brand"><img src="/open-browser-icon.png" width="28" height="28" alt="">open-browser</header>
+      <div class="rail-title"><h2>工作区</h2><span id="count" class="count">0</span></div>
+      <button id="show-new" class="new"><span aria-hidden="true">＋</span> 新建工作区</button>
+      <nav id="workspaces" aria-label="工作区列表"></nav><p id="rail-empty" class="rail-empty">暂无工作区</p>
+      <div id="connection-status" class="connection"><i></i><span id="connection">正在连接</span></div>
+    </aside>
+    <main>
+      <div id="notice" role="status" hidden></div>
+      <section id="new-view">
+        <header class="section-head"><h1>新建工作区</h1><p>为任务打开独立的浏览器页面。</p></header>
+        <form id="new-form" class="panel editor">
+          <div class="field"><label for="name">工作区名称</label><input id="name" value="我的工作区" maxlength="80" required></div>
+          <div class="field"><label for="url">打开网址</label><input id="url" type="url" placeholder="https://example.com" required></div>
+          <button class="primary">创建并打开 <span aria-hidden="true">↗</span></button>
+        </form>
+        <div class="demo-block">
+          <div class="demo-header"><span class="site-mark" aria-hidden="true">◎</span><div><h2>账号登录演示</h2><p>在本机验证站试用自动登录或补充密码。</p></div></div>
+          <div class="buttons"><button id="demo">自动登录</button><button id="missing">测试缺少密码</button></div>
+        </div>
+      </section>
+      <section id="active-view" hidden>
+        <header class="section-head active-head"><div><h1 id="workspace-name"></h1><p id="wid" class="mono subtle"></p></div>
+          <div class="buttons"><button id="take" class="primary">接管页面</button><button id="view-controlled">查看接管页</button><button id="give" class="primary">交回 Agent</button></div>
+        </header>
+        <section id="work-summary" class="summary">
+          <div><h2>控制权</h2><strong id="mode"></strong></div>
+          <div><h2>当前活动</h2><strong id="work-state"></strong></div>
+          <div><h2>最近结果</h2><strong id="result-text"></strong></div>
+        </section>
+        <section id="credential-view" class="credential" hidden><h2 id="credential-title">需要补充凭据</h2>
+          <dl class="meta"><dt>站点</dt><dd id="credential-origin"></dd><dt>凭据引用</dt><dd id="credential-ref"></dd></dl>
+          <form id="credential-form"><label for="password" id="credential-label">凭据值</label><input id="password" type="password" required autocomplete="off">
+            <div class="buttons"><button id="submit-credential" class="primary">绑定凭据</button><button type="button" id="insert-password">填入演示密码</button></div>
+          </form>
+        </section>
+        <section class="panel page-panel">
+          <div class="section-title"><h2>工作区页面</h2><select id="pages" aria-label="当前页面"></select></div>
+          <form id="page-form" class="nav-form"><label for="address">打开新页面</label><div><input type="url" id="address" placeholder="https://example.com" required><button>打开 ↗</button></div></form>
+          <div class="section-title"><h3>页面观察</h3><span id="observed-at"></span></div>
+          <pre id="snapshot">暂无观察结果</pre>
+          <div class="buttons"><button id="observe">读取页面</button><button id="login-action" hidden>运行登录任务</button></div>
+        </section>
+        <details id="credential-settings"><summary>绑定站点凭据</summary>
+          <form id="bind-form" class="editor">
+            <div class="field"><label for="bind-id">凭据引用</label><input id="bind-id" placeholder="account.password" maxlength="128" required></div>
+            <div class="field"><label for="bind-value">值</label><input type="password" autocomplete="off" id="bind-value" required></div>
+            <button>绑定到当前页面来源</button>
+          </form>
+        </details>
+        <details id="demo-details" hidden><summary>演示账号</summary><dl class="meta"><dt>账号</dt><dd id="demo-user"></dd><dt>密码</dt><dd><button id="reveal" class="quiet">显示密码</button><span id="demo-secret" class="mono"></span></dd></dl></details>
+        <button id="close-workspace" class="quiet danger">关闭工作区</button>
+      </section>
+      <section class="activity"><div class="section-title"><h2>控制台操作记录</h2><span id="activity-count"></span></div><ol id="activity"><li class="empty">本次打开控制台后暂无操作</li></ol></section>
+    </main>
+  </div>
+  <script src="/studio.js" defer></script>
+</body></html>

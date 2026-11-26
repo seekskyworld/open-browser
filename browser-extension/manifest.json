@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "open-browser",
+  "version": "0.1.0",
+  "description": "管理本机 Agent 工作区与 Chromium 标签组",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAhZVSXIA/vfzO0jj4ebn25I3lbL//y8FbZUeQ8Q9shwfMWTbl3bsjcHzIITSGg5+NqVTAEB1AgjFZDi/Idoj+tgsvwQxXbMBzgdZA1tQMASXcbFRdVNTxWbRBSd4JXtsFfD7H6QeBwXuIHNqUeyQYD0sYn8Ot0c4KJCzsYshYPLU56+Lzdoy+7l6ydmmw31T4tpanZHJvUgyzATOjEekFJii+9IEI/G4BUGQhKdPqR/MBYiqzxgPB5WIr3w25z6bH5KC6wnUxblLQM0RAHa4hot38NOFul5JCW6BOLHEes7Pz3DOUpWFP+DFSkY42r0dt1Kh/5CFKr6ED3agcc+tB1wIDAQAB",
+  "permissions": [
+    "debugger",
+    "tabGroups",
+    "storage",
+    "contextMenus"
+  ],
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "action": {
+    "default_title": "open-browser 工作区",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/open-browser-16.png",
+      "32": "icons/open-browser-32.png",
+      "48": "icons/open-browser-48.png",
+      "128": "icons/open-browser-128.png"
+    }
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+  },
+  "icons": {
+    "16": "icons/open-browser-16.png",
+    "32": "icons/open-browser-32.png",
+    "48": "icons/open-browser-48.png",
+    "128": "icons/open-browser-128.png"
+  }
+}

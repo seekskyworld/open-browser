@@ -1,0 +1,59 @@
+{
+  "name": "@seekskyworld/open-browser",
+  "version": "0.1.0",
+  "private": false,
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seekskyworld/open-browser.git"
+  },
+  "homepage": "https://github.com/seekskyworld/open-browser#readme",
+  "bugs": {
+    "url": "https://github.com/seekskyworld/open-browser/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "open-browser": "./cli.mjs",
+    "open-browser-mcp": "./mcp.mjs",
+    "open-browser-skill": "./skills/open-browser/scripts/open-browser"
+  },
+  "exports": {
+    ".": "./sdk.mjs",
+    "./sdk": "./sdk.mjs",
+    "./cli": "./cli.mjs",
+    "./mcp": "./mcp.mjs",
+    "./skill": "./skills/open-browser/SKILL.md",
+    "./api": "./Docs/open-browser-api.d.ts",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node desktop/start.mjs",
+    "build": "node desktop/build.mjs",
+    "cli": "node cli.mjs",
+    "mcp": "node mcp.mjs",
+    "package:check": "npm pack --dry-run",
+    "browser:install": "node runtime.mjs",
+    "control": "node control.mjs",
+    "test": "npm run test:unit",
+    "test:unit": "node --test --test-concurrency=1 *.test.mjs studio/*.test.mjs",
+    "test:contract": "node --test --test-concurrency=1 experiments/observe-contract.test.mjs hosted/hosted.test.mjs",
+    "test:all": "npm run test:unit && npm run test:contract",
+    "test:headed": "OPEN_BROWSER_QA_HEADED=1 node desktop/verify-upgrade.mjs",
+    "build:verify": "node desktop/verify-version.mjs && npm run build",
+    "clean": "node -e \"import('node:fs/promises').then(({rm}) => Promise.all(['dist','.open-browser'].map(p => rm(p,{recursive:true,force:true}))) )\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "playwright-core": "1.65.1",
+    "pngjs": "7.0.0"
+  },
+  "devDependencies": {
+    "resedit": "3.1.1"
+  }
+}

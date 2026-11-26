@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "origin": "https://example.test",
+  "steps": [
+    {"kind": "upload", "target": {"role": "button", "name": "Upload attachment"}, "binding": "attachment"},
+    {"kind": "expect", "target": {"role": "checkbox", "name": "Verified"}, "state": {"checked": true}}
+  ]
+}

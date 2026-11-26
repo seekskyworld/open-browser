@@ -1,0 +1,20 @@
+:root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 620px; background: Canvas; color: CanvasText; }
+header { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 34px; border-bottom: 1px solid color-mix(in srgb, CanvasText 14%, transparent); }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 17px; letter-spacing: -.2px; } .brand img { border-radius: 7px; }
+#status { color: color-mix(in srgb, CanvasText 62%, Canvas); font-size: 12px; }
+main { width: min(980px, calc(100% - 68px)); margin: 42px auto 72px; }
+.hero, .section-title { display: flex; align-items: center; justify-content: space-between; gap: 20px; } h1 { margin: 0; font-size: 28px; letter-spacing: -.8px; } h2 { margin: 0; font-size: 16px; } p { margin: 6px 0 0; color: color-mix(in srgb, CanvasText 66%, Canvas); }
+section { margin-top: 34px; } .section-title { margin-bottom: 12px; }
+.how-to { padding: 18px; border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 10px; background: color-mix(in srgb, CanvasText 3%, Canvas); }
+.how-to p { margin-top: 0; }
+#agent-prompt { width: 100%; min-height: 84px; margin-top: 12px; padding: 11px 12px; resize: vertical; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; background: Canvas; color: CanvasText; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.workspace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.card { padding: 16px; border: 1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius: 10px; background: color-mix(in srgb, CanvasText 4%, Canvas); }
+.card strong { display: block; font-size: 14px; } .detail, .agent-name { display: block; margin-top: 5px; color: color-mix(in srgb, CanvasText 62%, Canvas); font-size: 12px; } .name-hint { display: block; margin-top: 8px; color: #a05b00; font-size: 12px; font-weight: 600; } .card .state { margin-top: 14px; color: #28734c; font-weight: 600; }
+.history-list { display: grid; gap: 2px; border-top: 1px solid color-mix(in srgb, CanvasText 12%, transparent); }
+.history-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 2px; border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent); }
+.history-title { display: block; font-size: 14px; font-weight: 600; } .history-meta { display: grid; justify-items: end; gap: 4px; white-space: nowrap; } .history-state { font-size: 12px; font-weight: 600; color: #28734c; } .history-state.failed, .history-state.outcome_unknown { color: #a44b2b; }
+.empty { padding: 22px 0; } .quiet { cursor: pointer; color: color-mix(in srgb, CanvasText 68%, Canvas); background: none; border: 0; text-decoration: none; padding: 4px 0; font: inherit; } #notice.error { color: #a44b2b; } [hidden] { display: none !important; }
+@media (max-width: 700px) { body { min-width: 0; } header { padding: 0 20px; } main { width: calc(100% - 40px); margin-top: 28px; } }
