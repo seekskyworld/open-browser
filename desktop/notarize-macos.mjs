@@ -57,17 +57,17 @@ async function requirePath(target, label) {
 
 function notaryCredentials() {
   const profile = process.env.OPEN_BROWSER_NOTARY_PROFILE;
-  const key = process.env.OPEN_BROWSER_NOTARY_KEY;
-  const keyId = process.env.OPEN_BROWSER_NOTARY_KEY_ID;
-  const issuer = process.env.OPEN_BROWSER_NOTARY_ISSUER;
-  const appleId = process.env.OPEN_BROWSER_NOTARY_APPLE_ID;
-  const teamId = process.env.OPEN_BROWSER_NOTARY_TEAM_ID;
-  const password = process.env.OPEN_BROWSER_NOTARY_PASSWORD;
+  const key = process.env.OPEN_BROWSER_NOTARY_KEY || process.env.APPLE_API_KEY_PATH;
+  const keyId = process.env.OPEN_BROWSER_NOTARY_KEY_ID || process.env.APPLE_API_KEY;
+  const issuer = process.env.OPEN_BROWSER_NOTARY_ISSUER || process.env.APPLE_API_ISSUER;
+  const appleId = process.env.OPEN_BROWSER_NOTARY_APPLE_ID || process.env.APPLE_ID;
+  const teamId = process.env.OPEN_BROWSER_NOTARY_TEAM_ID || process.env.APPLE_TEAM_ID;
+  const password = process.env.OPEN_BROWSER_NOTARY_PASSWORD || process.env.APPLE_PASSWORD;
 
   const apiKeyFields = [key, keyId, issuer].filter(Boolean).length;
   const hasApiKey = Boolean(key || keyId || issuer);
-  const hasAppleId = Boolean(appleId || teamId || password);
-  if (profile && (hasApiKey || hasAppleId))
+  const hasAppleId = Boolean(appleId || password);
+  if (profile && (hasApiKey || hasAppleId || teamId))
     throw new Error('OPEN_BROWSER_NOTARY_PROFILE 不能和其他凭据模式同时设置。');
   if (hasApiKey && hasAppleId)
     throw new Error('API Key 和 Apple ID 公证凭据不能混用。');

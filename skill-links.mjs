@@ -10,7 +10,8 @@ const agentRoots = [
   ['codex', '.codex'],
   ['claude-code', '.claude'],
   ['cursor', '.cursor'],
-  ['windsurf', '.windsurf'],
+  ['windsurf', path.join('.codeium', 'windsurf')],
+  ['windsurf-legacy', '.windsurf'],
   ['gemini-cli', '.gemini'],
   ['cline', '.cline'],
   ['roo-code', '.roo'],
@@ -30,15 +31,6 @@ function configuredRoots() {
   return [...agentRoots, ...extra.map(root => ({ name: 'configured', root, configured: true }))];
 }
 
-async function exists(pathname) {
-  try {
-    await lstat(pathname);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function isDirectory(pathname) {
   try {
     return (await lstat(pathname)).isDirectory();
@@ -56,7 +48,6 @@ async function linkSkill(root, source) {
     try {
       const current = await realpath(link);
       if (current === source) return { status: 'existing', path: link };
-      if (await exists(path.join(current, 'SKILL.md'))) return { status: 'existing', path: link };
     } catch {
       // Replace a broken open-browser link with the current source.
     }

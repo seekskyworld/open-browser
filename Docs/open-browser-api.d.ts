@@ -33,12 +33,14 @@ export interface WorkspaceOperation {
 }
 
 export interface WorkspaceActivity {
-  phase: 'idle' | 'needs_credential' | OperationReceipt['state'];
+  phase: 'idle' | 'needs_credential' | 'needs_human_verification' | OperationReceipt['state'];
   queued: number;
   running: WorkspaceOperation[];
   current: WorkspaceOperation | null;
   recent: WorkspaceOperation | null;
   needsCredential: boolean;
+  needsHumanVerification: boolean;
+  securityChallenge?: { provider: 'cloudflare' | string; origin: string; status: number; detectedAt: number };
   /** Only getWorkspace returns request metadata. No credential values are returned. */
   credentialRequest: {
     documentId: string;

@@ -14,6 +14,7 @@ open-browser 是一个本机运行的开源 Agent 浏览器，自带 Chromium。
 
 - **后台并行处理网页。** 不同工作区可以同时推进，同一页的动作按顺序执行。服务保证同页动作按顺序执行，同时允许不同工作区并发。可运行 `npm run test:unit` 和 `npm run test:contract` 重现本机回归套件。
 - **人和 Agent 接力完成任务。** 登录需要你确认时，接管原标签就能继续操作，保留当前表单和登录态。交回后，Agent 重新观察页面再继续。你也可以预先为指定站点绑定凭据，让常规登录自动完成。[工作区与接管](Docs/控制台分组与接管方案.md)
+- **站点安全验证暂停。** 检测到站点返回安全验证挑战时，工作区会停止 Agent 操作并显示“需要人工验证”。用户在可见页面完成站点自己的验证后交回控制权，再重新观察。open-browser 不隐藏自动化信号，也不绕过验证。
 - **新标签页就是任务控制台。** 每个新标签页只显示正在运行的 Agent 和运行历史，包含 Agent 名称、任务状态、最近步骤和时间。页面底部悬浮栏只保留人工接管和一键「结束」，结束时保留现有页面并撤销任务分组，不再弹出交付窗口。
 - **给 Agent 刚好够用的权限。** 给核对结果的助手授予只读权限，给填写表单的助手授予控制权限。受管页面按任务授权访问站点，读取截图还需要单独的像素授权。[接口与权限](Docs/open-browser-api.d.ts)
 - **断线后查清上一步。** CLI 进程退出后，工作区由本机服务继续管理。连接恢复时，可以凭操作 ID 查询回执。遇到提交结果未知的情况，先核对站点，避免把同一张表单再交一次。[任务评测指南](Docs/open-browser任务评测指南.md)
@@ -58,7 +59,7 @@ Scoped npm 包提供同一套实现的三个入口。运行 `npm install @seeksk
 
 Agent 使用 [open-browser Skill](skills/open-browser/SKILL.md) 时，通过 `skills/open-browser/scripts/open-browser` 调用 CLI。Skill 会在需要时启动本机 open-browser 应用或便携服务，等待就绪后自动重试一次。设置 `OPEN_BROWSER_AUTOSTART=0` 可要求服务必须已运行。希望先打开桌面窗口时，也可以手动启动应用或执行 `npm start`。
 
-首次运行 Skill 或本机服务时，open-browser 会检测已经存在的 Codex、Claude Code、Cursor、Windsurf、Gemini CLI、Cline、Roo Code 和 OpenCode Skill 目录，并在其中创建 `open-browser` 相对符号链接。已有文件和非 open-browser 符号链接会保留。设置 `OPEN_BROWSER_AUTO_INSTALL_SKILLS=0` 可关闭自动安装，也可以通过 `OPEN_BROWSER_AGENT_SKILL_DIRS` 路径列表补充其他 Agent 的 Skill 目录。
+首次运行 Skill 或本机服务时，open-browser 会检测已经存在的 Codex、Claude Code、Cursor、Windsurf、Gemini CLI、Cline、Roo Code 和 OpenCode Skill 目录，并在其中创建 `open-browser` 相对符号链接。已有文件和非 open-browser 符号链接会保留。Windsurf 的标准目录 `~/.codeium/windsurf/skills` 和旧版目录 `~/.windsurf/skills` 都支持。设置 `OPEN_BROWSER_AUTO_INSTALL_SKILLS=0` 可关闭自动安装，也可以通过 `OPEN_BROWSER_AGENT_SKILL_DIRS` 路径列表补充其他 Agent 的 Skill 目录。
 
 先打开应用或执行 `npm start`。在项目根目录运行 `node cli.mjs createWorkspace` 创建工作区，运行 `node cli.mjs listWorkspaces` 查看结果。带参数的命令通过标准输入传入 JSON。`node cli.mjs --help` 列出全部方法。
 

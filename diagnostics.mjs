@@ -1,5 +1,6 @@
 // Export only categories from this table. IDs, URLs, page text and errors can contain user input.
 const advice = new Map([
+  ['human_verification_required',['verification','take_control_and_complete_verification']],
   ['target_obscured',['obscured','observe_foreground']],
   ['timeout',['timeout','check_site_result']],
   ['wait_timeout',['timeout','check_site_result']],

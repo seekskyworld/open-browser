@@ -140,6 +140,9 @@ export async function returnToAgent(service, ws, expectedGeneration) {
     await ws.inputTail;
     await Promise.all([...ws.pages.values()].map(releaseInput));
     if (ws.mode !== 'transferring') fail('workspace_closed');
+    // Returning control acknowledges that the user handled the visible site
+    // verification. A later navigation or response can raise it again.
+    ws.securityChallenge = null;
     ws.control = new AbortController();
     ws.mode = 'agent';
     service.store.event(ws.owner, ws.id, 'control', ws.mode);

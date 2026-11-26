@@ -58,12 +58,13 @@ static NSString *Status(NSDictionary *workspace) {
     if ([workspace[@"mode"] isEqual:@"human"]) return @"用户控制 · Agent 已暂停";
     if ([workspace[@"mode"] isEqual:@"transferring"]) return @"正在交接控制权";
     NSDictionary *activity = workspace[@"activity"];
+    if ([activity[@"needsHumanVerification"] boolValue]) return @"需要人工验证";
     if ([activity[@"needsCredential"] boolValue]) return @"等待补充凭据";
     NSString *current = Operation(Map(activity[@"current"]));
     if (current.length) return current;
     NSDictionary *phase = @{@"running":@"执行中", @"actionability":@"检查目标", @"dispatching":@"正在派发",
                             @"waiting":@"等待页面", @"verifying":@"核对结果", @"queued":@"排队中", @"completed":@"已完成", @"failed":@"执行失败",
-                            @"outcome_unknown":@"结果待核对", @"cancelled":@"已取消", @"needs_credential":@"等待补充凭据"};
+                            @"outcome_unknown":@"结果待核对", @"cancelled":@"已取消", @"needs_credential":@"等待补充凭据", @"needs_human_verification":@"需要人工验证"};
     return phase[String(activity[@"phase"])] ?: @"等待指令";
 }
 

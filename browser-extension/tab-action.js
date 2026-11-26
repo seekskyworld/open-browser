@@ -28,6 +28,7 @@ const actionStates = {
   waiting: ['…', '#6757a4', '等待页面'],
   verifying: ['✓', '#526675', '核对结果'],
   needs_credential: ['!', '#a72f24', '等待凭据'],
+  needs_human_verification: ['!', '#a75d08', '需要人工验证'],
   completed: ['✓', '#526675', '已完成'],
   failed: ['!', '#a72f24', '执行失败'],
   outcome_unknown: ['?', '#a75d08', '结果待核实'],
@@ -51,10 +52,10 @@ async function writeAction(tabId, record) {
     return;
   }
   await chrome.storage.session.set({ [key]: record });
-  const phase = record.mode !== 'agent' ? record.mode : record.needsCredential ? 'needs_credential' : record.phase;
+  const phase = record.mode !== 'agent' ? record.mode : record.needsHumanVerification ? 'needs_human_verification' : record.needsCredential ? 'needs_credential' : record.phase;
   showRunning(tabId, ['running', 'actionability', 'dispatching', 'waiting', 'verifying'].includes(phase));
   const [text, color, status] = actionStates[phase] || actionStates.idle;
-  const panel = phase === 'needs_credential' || phase === 'transferring' || !record.controlGeneration;
+  const panel = phase === 'needs_credential' || phase === 'needs_human_verification' || phase === 'transferring' || !record.controlGeneration;
   const steps = { click: '点击', fill: '填写', fillCredential: '填写凭据' };
   const step = phase === 'running' && record.dispatchState ? (record.dispatchState === 'dispatched' ? '已派发' : '等待页面') : phase === 'running' ? steps[record.stepKind] : '';
   const hint = record.mode === 'human' ? '点击交回 Agent' : panel ? '点击打开工作区面板' : '点击接管';

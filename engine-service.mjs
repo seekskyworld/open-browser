@@ -94,7 +94,7 @@ export class BrowserService {
     this.notifier.notify(ws);
   }
 
-  notifyTarget(ws, tab, el, documentId, controlGeneration, origin) {
+  notifyTarget(ws, tab, el, documentId, controlGeneration, origin, actionKind = '操作') {
     if (!this.onActionTarget) return;
     const ticket = Symbol();
     tab.latestTarget = ticket;
@@ -109,8 +109,10 @@ export class BrowserService {
       const left = Math.max(0, box.x), right = Math.min(size.width, box.x + box.width);
       const top = Math.max(0, box.y), bottom = Math.min(size.height, box.y + box.height);
       if (!(right > left && bottom > top)) return;
-      return this.onActionTarget({ workspaceId: ws.id, pageId: tab.id, documentId, controlGeneration,
-        x: (left + right) / 2, y: (top + bottom) / 2, origin });
+      const target = { workspaceId: ws.id, pageId: tab.id, documentId, controlGeneration,
+        x: (left + right) / 2, y: (top + bottom) / 2, origin };
+      Object.defineProperty(target, 'actionKind', { value: actionKind, enumerable: false });
+      return this.onActionTarget(target);
     }).catch(() => {});
   }
 
@@ -386,6 +388,7 @@ export class BrowserService {
     if (existing) return existing;
     const tab = { id: randomUUID(), page, documentId: randomUUID(), refs:new Map(), frameRefs:new Map(), frameDocuments:new WeakMap(), frameIds:new WeakMap(), cursors:new Map(), frameRevision:0, title: '',
       heldKeys: new Set(), heldButtons: new Set() };
+    ws.securityChallenge = null;
     this.store.remember(ws.owner, ws.id, 'page', tab.id);
     ws.pages.set(tab.id, tab);
     const releaseDialogs = attachDialogs(ws,tab,()=>{
@@ -403,6 +406,7 @@ export class BrowserService {
       }
       ws.credentialRequests.delete(tab.id);
       tab.title = '';
+      ws.securityChallenge = null;
       tab.documentId = randomUUID();
       clearRefs(tab);
       this.notify(ws);
@@ -411,6 +415,22 @@ export class BrowserService {
       void refreshTitle(ws, tab);
     };
     const loaded = () => { void refreshTitle(ws, tab); };
+    const response = async response => {
+      try {
+        if (response.request().resourceType() !== 'document') return;
+        const headers = await response.allHeaders();
+        const mitigated = headers['cf-mitigated']?.toLowerCase() === 'challenge';
+        const cloudflare = headers.server?.toLowerCase().includes('cloudflare');
+        if (!mitigated && !(cloudflare && response.status() >= 403)) return;
+        const url = URL.parse(response.url());
+        if (!url || !['http:', 'https:'].includes(url.protocol)) return;
+        ws.securityChallenge = { provider: 'cloudflare', origin: url.origin,
+          status: response.status(), detectedAt: Date.now() };
+        this.store.event(ws.owner, ws.id, 'security', 'human_verification_required', null,
+          { pageId: tab.id, origin: url.origin, status: response.status() });
+        this.notify(ws);
+      } catch { /* A closing page cannot change the workspace state. */ }
+    };
     const closed = () => {
       releaseDialogs();
       void tab.summarySession?.detach().catch(() => {});
@@ -429,12 +449,14 @@ export class BrowserService {
     page.on('framenavigated', navigated);
     page.on('framedetached', navigated);
     page.on('domcontentloaded', loaded);
+    page.on('response', response);
     page.on('close', closed);
     tab.unregister = () => {
       page.off('download', downloaded);
       page.off('framenavigated', navigated);
       page.off('framedetached', navigated);
       page.off('domcontentloaded', loaded);
+      page.off('response', response);
       page.off('close', closed);
       closed();
     };
@@ -449,6 +471,7 @@ export class BrowserService {
 
   requireControl(ws, generation) {
     if (ws.finishing) fail('workspace_finishing');
+    if (ws.securityChallenge) fail('human_verification_required');
     if (ws.mode !== 'agent') fail('workspace_under_user_control');
     if (ws.generation !== generation) fail('stale_control');
   }

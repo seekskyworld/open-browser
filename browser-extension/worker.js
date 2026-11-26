@@ -36,8 +36,8 @@ function agentColor(name = 'Agent') {
 }
 
 async function updateGroup(groupId, group, state) {
-  const { mode, phase, needsCredential } = state;
-  const attention = needsCredential || ['failed', 'outcome_unknown', 'needs_credential'].includes(phase);
+  const { mode, phase, needsCredential, needsHumanVerification } = state;
+  const attention = needsCredential || needsHumanVerification || ['failed', 'outcome_unknown', 'needs_credential', 'needs_human_verification'].includes(phase);
   const color = mode === 'human' ? 'green' : mode === 'transferring' ? 'yellow' : attention ? 'red' : agentColor(state.agentName);
   const title = workspaceTitle(state);
   if (group?.color !== color || group?.title !== title) await chrome.tabGroups.update(groupId, { title, color });

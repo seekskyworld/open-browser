@@ -45,7 +45,7 @@ function signCode(path, identity, preserveEntitlements = false) {
   }
 }
 
-export function signingIdentity(requested = process.env.OPEN_BROWSER_SIGN_IDENTITY) {
+export function signingIdentity(requested = process.env.OPEN_BROWSER_SIGN_IDENTITY || process.env.APPLE_SIGNING_IDENTITY) {
   const listing = execFileSync('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
   const identities = [...listing.matchAll(/^\s*\d+\) ([0-9A-F]{40}) "([^"]+)"\s*$/gm)];
   const matches = identities.filter(([, hash, name]) => name.startsWith('Developer ID Application:') &&

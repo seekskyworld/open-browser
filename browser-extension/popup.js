@@ -16,6 +16,7 @@ function notify(text = '') {
 }
 
 function describe(w) {
+  if (w.activity?.needsHumanVerification) return '需要人工验证';
   if (w.mode === 'human') return '人工接管';
   if (w.mode === 'transferring') return '交接中';
   if (w.activity?.needsCredential) return '等待凭据';

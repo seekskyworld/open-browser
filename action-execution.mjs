@@ -273,7 +273,7 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
           rememberBlock(ws, webOrigin(target), 'navigation', 'document', 'origin_denied');
           fail('origin_denied');
         }
-        service.notifyTarget(ws, tab, el, documentId, controlGeneration, origin);
+        service.notifyTarget(ws, tab, el, documentId, controlGeneration, origin, action.kind);
         await waitActionable(service, ws, tab, op, el, action.kind, documentId, controlGeneration);
         await service.checkSemanticTarget(ws,tab,action.ref,frameEntry,el,action.kind);
         clickProbe = await armClickProbe(el, 1);
@@ -301,7 +301,7 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
           if (lease.opening) await lease.opening;
         }
       } else if (action.kind === 'doubleClick' || action.kind === 'hover' || action.kind === 'press' || action.kind === 'scroll' || action.kind === 'drag') {
-        service.notifyTarget(ws, tab, el, documentId, controlGeneration, origin);
+        service.notifyTarget(ws, tab, el, documentId, controlGeneration, origin, action.kind);
         await waitActionable(service, ws, tab, op, el, action.kind, documentId, controlGeneration);
         await service.checkSemanticTarget(ws,tab,action.ref,frameEntry,el,action.kind);
         if (action.kind === 'doubleClick') clickProbe = await armClickProbe(el, 2);
@@ -316,7 +316,7 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
           await tab.page.mouse.wheel(action.deltaX ?? 0, action.deltaY);
         } else await el.dragTo(destination, {timeout:5000});
       } else {
-        service.notifyTarget(ws, tab, el, documentId, controlGeneration, origin);
+        service.notifyTarget(ws, tab, el, documentId, controlGeneration, origin, action.kind);
         await waitActionable(service, ws, tab, op, el, action.kind, documentId, controlGeneration);
         await service.checkSemanticTarget(ws,tab,action.ref,frameEntry,el,action.kind);
         beforeDispatch(service, ws, tab, op, documentId, controlGeneration);

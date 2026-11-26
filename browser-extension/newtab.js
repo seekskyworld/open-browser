@@ -23,6 +23,7 @@ function friendlyError(error) {
 }
 
 function stateLabel(workspace) {
+  if (workspace.activity?.needsHumanVerification) return '需要人工验证';
   if (workspace.activity?.needsCredential) return '等待凭据';
   return modes[workspace.mode] || phases[workspace.activity?.current?.phase] || phases[workspace.activity?.phase] || '待命';
 }

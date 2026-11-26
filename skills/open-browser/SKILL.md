@@ -19,7 +19,7 @@ printf '%s\n' '{"workspaceId":"WORKSPACE_ID","pageId":"PAGE_ID"}' | "$ob" observ
 
 多步骤任务使用 `createWorkspace` 和 `openPage`，因为它们允许你明确设置 `allowedOrigins` 与 `resourceOrigins`。调用 `capabilities` 可先查看当前服务版本、限额、隐私模式及可用视觉动作。
 
-遇到错误时按返回的 `code` 和 `nextAction` 处理。`stale_ref`、`stale_document`、`stale_control` 和 `stale_observation` 先重新 `observe`。`target_ambiguous` 用 `observe.locator` 缩小范围。`target_obscured` 等待遮罩消失后用新的操作号重试。`origin_denied` 先核对 `blockedOrigins`，取得工作区控制权后再用 `grantOrigin`。`REQUEST_TIMEOUT`、`run_timeout`、`outcome_unknown` 或 `inspect_before_retry` 先用同一个 `operationId` 查询回执并核对站点结果。
+遇到错误时按返回的 `code` 和 `nextAction` 处理。`stale_ref`、`stale_document`、`stale_control` 和 `stale_observation` 先重新 `observe`。`target_ambiguous` 用 `observe.locator` 缩小范围。`target_obscured` 等待遮罩消失后用新的操作号重试。`origin_denied` 先核对 `blockedOrigins`，取得工作区控制权后再用 `grantOrigin`。`human_verification_required` 表示站点要求安全验证，停止重试，调用 `handOff`，让用户在可见页面完成验证后再调用 `returnToAgent` 并重新 `observe`。`REQUEST_TIMEOUT`、`run_timeout`、`outcome_unknown` 或 `inspect_before_retry` 先用同一个 `operationId` 查询回执并核对站点结果。
 
 若只使用 SDK，可用 `openAndObserve` 省去首次句柄拼接，用 `actAfterObserve` 自动以最新文档和控制代次执行一批动作，用 `finish` 自动生成交付操作号。这些辅助方法仍执行服务端的工作区权限、来源和过期引用检查。
 

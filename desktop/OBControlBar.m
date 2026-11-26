@@ -177,7 +177,7 @@ static NSString *Text(id value) { return [value isKindOfClass:NSString.class] ? 
     if (![self.pending isEqual:binding]) self.pending = nil;
     BOOL human = [bar[@"mode"] isEqual:@"human"], transferring = [bar[@"mode"] isEqual:@"transferring"];
     NSDictionary *states = @{@"actionability":@"检查目标", @"dispatching":@"正在派发", @"waiting":@"等待页面", @"verifying":@"核对结果", @"dispatched":@"已派发", @"running":@"执行中", @"queued":@"已排队", @"idle":@"待命", @"completed":@"已完成",
-        @"needs_credential":@"等待凭据", @"failed":@"失败", @"cancelled":@"已取消", @"outcome_unknown":@"待核实"};
+        @"needs_credential":@"等待凭据", @"needs_human_verification":@"需要人工验证", @"failed":@"失败", @"cancelled":@"已取消", @"outcome_unknown":@"待核实"};
     self.agent.stringValue = Text(bar[@"agentName"]).length ? bar[@"agentName"] : @"Agent";
     self.agent.toolTip = self.agent.stringValue;
     self.status.stringValue = transferring ? @"交接中" : human ? @"人工控制" : states[Text(bar[@"phase"])] ?: @"待命";

@@ -83,13 +83,16 @@ export function workspaceView(ws, includeCredentialRequest = false) {
   const request = ws.credentialRequests.values().next().value;
   const recent = operationView(ws.recent);
   let phase = 'idle';
-  if (current) phase = current.state;
+  if (ws.securityChallenge) phase = 'needs_human_verification';
+  else if (current) phase = current.state;
   else if (request) phase = 'needs_credential';
   else if (recent && recent.error !== 'credential_required') phase = recent.state;
   return { workspaceId: ws.id, profileId: serviceProfileId, name: ws.name, agentName: ws.agentName, mode: ws.mode, controlGeneration: ws.generation, pages,
     ...(includeCredentialRequest && {pendingDialogs: [...ws.pages.values()].flatMap(tab=>tab.dialog ? [tab.dialog.info] : [])}),
     ...(includeCredentialRequest && { blockedOrigins: [...ws.blockedOrigins.values()] }),
-    activity: { phase, queued: queued.length, needsCredential: !!request, current, recent,
+    activity: { phase, queued: queued.length, needsCredential: !!request,
+      needsHumanVerification: !!ws.securityChallenge,
+      ...(ws.securityChallenge && { securityChallenge: { ...ws.securityChallenge } }), current, recent,
       running: running.map(job => ({ ...operationView(job), ...(ws.pages.has(job.pageId) && {pageId:job.pageId}) })),
       credentialRequest: request && includeCredentialRequest ? { ...request } : null } };
 }

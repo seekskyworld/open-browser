@@ -66,6 +66,7 @@ export async function chromiumHost(context) {
           workspaceId, agentName, name, mode, controlGeneration, pages: pages.map(({pageId}) => ({pageId})),
           running: activity.running, currentPageId: activity.current?.pageId, stepKind: activity.current?.stepKind,
           dispatchState: activity.current?.dispatchState, phase: activity.phase, needsCredential: activity.needsCredential,
+          needsHumanVerification: activity.needsHumanVerification,
         }));
         const signature = JSON.stringify(state);
         if (signature !== lastState) {
