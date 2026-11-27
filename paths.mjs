@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { buildProfile, scopedBuildRoot } from './build-profile.mjs';
 
 export const profileId = process.env.OPEN_BROWSER_PROFILE || 'default';
-const base = path.resolve(process.env.OPEN_BROWSER_STATE_DIR || path.join(homedir(), '.open-browser'));
+const base = scopedBuildRoot(path.resolve(process.env.OPEN_BROWSER_STATE_DIR || path.join(homedir(), '.open-browser')));
 
 export function pathsForProfile(id) {
   if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,47}$/.test(id)) throw new Error('invalid_profile');
@@ -16,5 +17,6 @@ export function pathsForProfile(id) {
   return {stateDir, socketPath, tokenPath:path.join(stateDir, 'open-browser.token'), pidPath:path.join(stateDir, 'open-browser.pid')};
 }
 
+export { buildProfile };
 export const {stateDir, socketPath, tokenPath, pidPath} = pathsForProfile(profileId);
 export const adminTokenPath = path.join(stateDir, 'open-browser-admin.token');

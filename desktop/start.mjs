@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import { pidPath, socketPath } from '../paths.mjs';
+import { isDevelopmentBuild } from '../build-profile.mjs';
 
 async function wakeExisting() {
   try {
@@ -23,7 +24,8 @@ async function wakeExisting() {
 if (await wakeExisting()) process.exit(0);
 
 if (process.platform === 'darwin') {
-  const bundle = fileURLToPath(new URL('../dist/open-browser.app', import.meta.url));
+  const bundleName = isDevelopmentBuild ? 'open-browser-dev.app' : process.arch === 'x64' ? 'open-browser-x64.app' : 'open-browser.app';
+  const bundle = fileURLToPath(new URL('../dist/' + bundleName, import.meta.url));
   if (!existsSync(bundle)) await import('./build.mjs');
   execFileSync('open', [bundle], { stdio: 'inherit' });
 } else {

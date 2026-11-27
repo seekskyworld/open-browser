@@ -31,7 +31,8 @@ function parseArgs(argv) {
       throw new Error('只能指定一个应用路径。');
     app = value;
   }
-  if (!zip) zip = path.join(path.dirname(app), `open-browser-macos-${process.arch}.zip`);
+  const appArch = app.endsWith('-x64.app') ? 'x64' : app.endsWith('-arm64.app') ? 'arm64' : process.arch;
+  if (!zip) zip = path.join(path.dirname(app), `open-browser-macos-${appArch}.zip`);
   return { app: path.resolve(app), zip: path.resolve(zip), help: false };
 }
 

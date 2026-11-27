@@ -9,6 +9,7 @@ import { chromium } from 'playwright-core';
 import { stateDir } from './paths.mjs';
 import { engineExecutable } from './runtime.mjs';
 import { chromiumPrivacyArgs } from './privacy-config.mjs';
+import { isDevelopmentBuild } from './build-profile.mjs';
 
 const extensionDir = fileURLToPath(new URL('./browser-extension', import.meta.url));
 const extensionId = 'ehmdmliolflappfnmopemgojhbiilmpl';
@@ -44,7 +45,7 @@ async function macPersistentEngine() {
     const { stderr } = await run('/usr/bin/codesign', ['-dv', '--verbose=2', outer]);
     const team = /^TeamIdentifier=([A-Z0-9]{10})$/m.exec(stderr)?.[1];
     if (!team) throw new Error('Developer ID team required');
-    const requirement = 'identifier "local.open-browser.chromium" and anchor apple generic and ' +
+    const requirement = 'identifier "local.open-browser' + (isDevelopmentBuild ? '-dev' : '') + '.chromium" and anchor apple generic and ' +
       'certificate 1[field.1.2.840.113635.100.6.2.6] exists and ' +
       'certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "' + team + '"';
     await run('/usr/bin/codesign', ['--verify', '-R=' + requirement, path.resolve(executable, '../../..')]);

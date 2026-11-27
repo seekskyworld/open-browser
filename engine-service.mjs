@@ -17,6 +17,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { ReceiptStore } from './receipt-store.mjs';
 import { DesktopFrames, enqueueHuman, navigatePage, pageInput, pageLocation, refreshTitle, releaseInput } from './desktop-page.mjs';
 import { privacyCapabilities } from './privacy-config.mjs';
+import { buildProfile } from './build-profile.mjs';
 import path from 'node:path';
 import { stateDir } from './paths.mjs';
 import { OutputStore } from './output-store.mjs';
@@ -154,7 +155,7 @@ export class BrowserService {
     if (this.stopped) fail('service_stopped');
     if (typeof clientId !== 'string' || !clientId) fail('unauthorized');
     if (!params || typeof params !== 'object' || Array.isArray(params)) fail('invalid_params');
-    if (method === 'capabilities') return {version:1,contractVersion:2,methods:agentMethods,capabilities:capabilityProfiles,limits,privacy:privacyCapabilities(),visual:{enabled:this.visual.enabled,actions:this.visual.enabled ? visualActions : []}};
+    if (method === 'capabilities') return {version:1,contractVersion:2,buildProfile,methods:agentMethods,capabilities:capabilityProfiles,limits,privacy:privacyCapabilities(),visual:{enabled:this.visual.enabled,actions:this.visual.enabled ? visualActions : []}};
     if(method==='runWorkflow') {
       params=workflowRequest(params);
       method='act';

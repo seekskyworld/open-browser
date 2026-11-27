@@ -19,7 +19,9 @@ VERSION = '159.0.8154.6'
 REVISION = '98a2592026af8d673b9fa83b626ac68bdf4ae78a'
 FRAMEWORK = 'Google Chrome for Testing Framework'
 SOURCE = b'Chromium Safe Storage'
-PRODUCT = b'open-browser Keychain'
+DEV = os.environ.get('OPEN_BROWSER_BUILD_PROFILE', '').strip().lower() == 'dev'
+PRODUCT = b'open-browser Dev Safe' if DEV else b'open-browser Keychain'
+EXPECTED_BUNDLE = 'local.open-browser-dev.chromium' if DEV else 'local.open-browser.chromium'
 # Mach CPU type -> offset in __TEXT,__const, input hash, branded hash.
 RELEASE = {
     0x0100000C: (225772584, 'a0a2e8854ce90268f5d9b32210cf53fc0709f4b798b3c3a96964ba3ebce4bc4b',
@@ -51,7 +53,8 @@ def brand(bundle):
     bundle = bundle.resolve(strict=True)
     with (bundle / 'Contents/Info.plist').open('rb') as stream:
         info = plistlib.load(stream)
-    if (bundle.name != 'open-browser.app' or info.get('CFBundleIdentifier') != 'local.open-browser.chromium'
+    expected_name = 'open-browser-dev.app' if DEV else 'open-browser.app'
+    if (bundle.name != expected_name or info.get('CFBundleIdentifier') != EXPECTED_BUNDLE
             or info.get('CFBundleShortVersionString') != VERSION
             or info.get('SCMRevision', '').split('-')[0] != REVISION):
         raise ValueError('Expected the staged open-browser Chromium bundle at the pinned upstream revision')

@@ -38,7 +38,8 @@ async function main() {
   run(stapler, stapler === '/usr/bin/xcrun' ? ['stapler', 'validate', app] : ['validate', app]);
   run(commandPath('spctl', '/usr/sbin/spctl'), ['--assess', '--type', 'execute', '--verbose=4', app]);
 
-  const zip = process.env.OPEN_BROWSER_NOTARY_ZIP || path.join(path.dirname(app), `open-browser-macos-${process.arch}.zip`);
+  const appArch = app.endsWith('-x64.app') ? 'x64' : app.endsWith('-arm64.app') ? 'arm64' : process.env.OPEN_BROWSER_TARGET_ARCH || process.arch;
+  const zip = process.env.OPEN_BROWSER_NOTARY_ZIP || path.join(path.dirname(app), `open-browser-macos-${appArch}.zip`);
   try {
     await access(zip);
     const checksumFile = zip + '.sha256';
