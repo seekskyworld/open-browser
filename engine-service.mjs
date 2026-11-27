@@ -58,13 +58,18 @@ const statusQueries = new Set(['getWorkspace', 'visualStatus', 'listDownloads', 
 
 export class BrowserService {
   constructor(browser, { concurrency = 4, lowMemoryMiB = Number(process.env.OPEN_BROWSER_LOW_MEMORY_MIB || 0), idleTimeoutMs = 30 * 60_000, sharedContext, groupTab, onActivity, onActionTarget,
-    journalPath, releaseTab, readOnlyObserver = readDocumentSummary } = {}) {
+    journalPath, releaseTab, setInputGuard, readOnlyObserver = readDocumentSummary } = {}) {
     if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16) fail('invalid_concurrency');
     if (!Number.isSafeInteger(idleTimeoutMs) || idleTimeoutMs <= 0) fail('invalid_idle_timeout');
     this.browser = browser;
     this.sharedContext = sharedContext;
     this.groupTab = groupTab;
     this.releaseTab = releaseTab;
+    if (setInputGuard) this.setInputGuard = (ws, tab, enabled) => setInputGuard(tab, enabled, () => {
+      ws.guardLost = true;
+      if (ws.mode === 'agent' && !ws.finishing && !this.stopped)
+        void this.handOff(ws, undefined, false).catch(() => {});
+    });
     this.readOnlyObserver = readOnlyObserver;
     this.actors = new AsyncLocalStorage();
     this.store = new ReceiptStore(journalPath, () => this.actors.getStore());
@@ -385,9 +390,11 @@ export class BrowserService {
     const ws = this.workspaces.get(created.workspaceId);
     if (!ws) fail('workspace_unavailable');
     try {
-      return await this.open(ws, url);
+      return await this.enqueue(ws, job => this.open(ws, url, job), {kind:'openPage'});
     } catch (error) {
-      await closeWorkspace(this, ws).catch(() => {});
+      // A takeover can happen while the first page is being opened. The
+      // workspace and any opened tab then belong to the person taking control.
+      if (ws.mode === 'agent' && !ws.finishing) await closeWorkspace(this, ws).catch(() => {});
       throw error;
     }
   }
@@ -667,6 +674,7 @@ export class BrowserService {
         });
         return lease.opening.then(()=>{},()=>{});
       });
+      if (ws.mode === 'agent') await this.setInputGuard?.(ws, tab, true);
       if (job) job.pageId = tab.id;
       this.notify(ws);
       if (this.sharedContext) await this.groupTab?.(page, ws.id, ws.name, ws.mode, ws.agentName, tab.id);

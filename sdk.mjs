@@ -23,6 +23,7 @@ export const recoveryHints = Object.freeze({
   target_missing: '重新 observe 并核对页面状态或目标名称。',
   navigation_failed: '先 observe 当前页面和地址，再决定是否重试导航。',
   origin_denied: '核对 blockedOrigins，取得控制权后用 grantOrigin 授权所需来源。',
+  input_guard_unavailable: '请检查 Dev Chromium 是否包含受管页面输入保护补丁。',
   workspace_under_user_control: '等待用户交回 Agent 控制权后重新 observe。',
   outcome_unknown: '先用 getOperation 或 diagnoseOperation，并核对站点结果后再重试。',
   inspect_before_retry: '先核对站点是否已生效，再决定是否提交新的 operationId。',

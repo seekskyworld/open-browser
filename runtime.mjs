@@ -42,6 +42,7 @@ async function install() {
     binary = await installWindowsIcons(binary);
   }
   const executable = path.relative(engineDir, binary);
+  const manifest = path.join(engineDir, `engine-${version}-${process.platform}-${targetArch()}.json`);
   const temp = manifest + '.' + randomUUID();
   await writeFile(temp, JSON.stringify({ executable }) + '\n', { flag: 'wx' });
   await rename(temp, manifest);

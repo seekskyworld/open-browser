@@ -1,0 +1,144 @@
+diff --git a/content/browser/devtools/protocol/devtools_protocol_browsertest.cc b/content/browser/devtools/protocol/devtools_protocol_browsertest.cc
+index 7f8f784..053c4c2 100644
+--- a/content/browser/devtools/protocol/devtools_protocol_browsertest.cc
++++ b/content/browser/devtools/protocol/devtools_protocol_browsertest.cc
+@@ -504,6 +504,38 @@ IN_PROC_BROWSER_TEST_F(SyntheticKeyEventTest, DISABLED_KeyboardEventAck) {
+   EXPECT_EQ(3, received_responses_count());
+ }
+ 
++IN_PROC_BROWSER_TEST_F(SyntheticMouseEventTest, OpenBrowserInputGuard) {
++  NavigateToURLBlockUntilNavigationsComplete(shell(), GURL("about:blank"), 1);
++  Attach();
++  auto* contents = shell()->web_contents();
++  ASSERT_TRUE(ExecJs(contents, "window.count = 0; onclick = () => ++count;"));
++  auto physical_click = [&]() {
++    SimulateMouseClickAt(contents, 0, blink::WebMouseEvent::Button::kLeft,
++                         gfx::Point(15, 15));
++  };
++  physical_click();
++  ASSERT_TRUE(base::test::RunUntil([&] {
++    return EvalJs(contents, "count").ExtractInt() == 1;
++  }));
++  base::DictValue params;
++  params.Set("enabled", true);
++  ASSERT_TRUE(
++      SendCommandSync("Input.setOpenBrowserInputGuard", std::move(params)));
++  for (int i = 0; i < 100; ++i) {
++    physical_click();
++    WaitForNotification("Input.openBrowserInputBlocked", true);
++    EXPECT_EQ(i + 1, EvalJs(contents, "count"));
++    SendMouseEvent("mousePressed", 15, 15, "left", true);
++    SendMouseEvent("mouseReleased", 15, 15, "left", true);
++    ASSERT_EQ(i + 2, EvalJs(contents, "count"));
++  }
++  Detach();
++  physical_click();
++  EXPECT_TRUE(base::test::RunUntil([&] {
++    return EvalJs(contents, "count").ExtractInt() == 102;
++  }));
++}
++
+ // Flaky: https://crbug.com/1263461
+ IN_PROC_BROWSER_TEST_F(SyntheticMouseEventTest, DISABLED_MouseEventAck) {
+   NavigateToURLBlockUntilNavigationsComplete(shell(), GURL("about:blank"), 1);
+diff --git a/content/browser/devtools/protocol/input_handler.cc b/content/browser/devtools/protocol/input_handler.cc
+index a769abe..754cb9b 100644
+--- a/content/browser/devtools/protocol/input_handler.cc
++++ b/content/browser/devtools/protocol/input_handler.cc
+@@ -1173,6 +1173,12 @@ void InputHandler::SetRenderer(int process_host_id,
+   host_ = frame_host;
+   web_contents_ = WebContentsImpl::FromRenderFrameHostImpl(host_);
+ 
++  if (guard_requested_ && old_web_contents != web_contents_) {
++    input_guard_.reset();
++    if (web_contents_) {
++      SetOpenBrowserInputGuard(true);
++    }
++  }
+   if (ignore_input_events_ && old_web_contents != web_contents_) {
+     if (web_contents_) {
+       scoped_ignore_input_events_ =
+@@ -1192,6 +1198,8 @@ Response InputHandler::Disable() {
+   ClearInputState();
+   scoped_ignore_input_events_.reset();
+   ignore_input_events_ = false;
++  input_guard_.reset();
++  guard_requested_ = false;
+   pointer_ids_.clear();
+   touch_points_.clear();
+   return Response::Success();
+@@ -2095,6 +2103,32 @@ Response InputHandler::EmulateTouchFromMouseEvent(
+   return Response::Success();
+ }
+ 
++bool InputHandler::AllowGuardedInput(const blink::WebInputEvent& event) {
++  if (event.GetModifiers() & blink::WebInputEvent::kFromDebugger) {
++    return true;
++  }
++  if (event.GetType() == blink::WebInputEvent::Type::kMouseDown ||
++      event.GetType() == blink::WebInputEvent::Type::kTouchStart) {
++    frontend_->OpenBrowserInputBlocked();
++  }
++  return false;
++}
++
++Response InputHandler::SetOpenBrowserInputGuard(bool enabled) {
++  if (enabled && !web_contents_) {
++    return Response::ServerError("No attached WebContents");
++  }
++  guard_requested_ = enabled;
++  if (!enabled) {
++    input_guard_.reset();
++  } else if (!input_guard_) {
++    // The callback is removed with the session-owned token.
++    input_guard_ = web_contents_->IgnoreInputEvents(base::BindRepeating(
++        &InputHandler::AllowGuardedInput, base::Unretained(this)));
++  }
++  return Response::Success();
++}
++
+ Response InputHandler::SetIgnoreInputEvents(bool ignore) {
+   ignore_input_events_ = ignore;
+   if (!ignore) {
+diff --git a/content/browser/devtools/protocol/input_handler.h b/content/browser/devtools/protocol/input_handler.h
+index 4c25a8c..ed48dfa 100644
+--- a/content/browser/devtools/protocol/input_handler.h
++++ b/content/browser/devtools/protocol/input_handler.h
+@@ -153,6 +153,7 @@ class InputHandler : public DevToolsDomainHandler, public Input::Backend {
+                                       std::optional<int> modifiers,
+                                       std::optional<int> click_count) override;
+ 
++  Response SetOpenBrowserInputGuard(bool enabled) override;
+   Response SetIgnoreInputEvents(bool ignore) override;
+   Response SetInterceptDrags(bool enabled) override;
+ 
+@@ -358,6 +359,9 @@ class InputHandler : public DevToolsDomainHandler, public Input::Backend {
+   bool ignore_input_events_ = false;
+   std::optional<content::WebContents::ScopedIgnoreInputEvents>
+       scoped_ignore_input_events_;
++  bool guard_requested_ = false;
++  std::optional<content::WebContents::ScopedIgnoreInputEvents> input_guard_;
++  bool AllowGuardedInput(const blink::WebInputEvent& event);
+   bool intercept_drags_ = false;
+   DragController drag_controller_;
+   const bool allow_file_access_;
+diff --git a/third_party/blink/public/devtools_protocol/domains/Input.pdl b/third_party/blink/public/devtools_protocol/domains/Input.pdl
+index 815bf7c..3e8a22d 100644
+--- a/third_party/blink/public/devtools_protocol/domains/Input.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Input.pdl
+@@ -256,6 +256,15 @@ domain Input
+       # Number of times the mouse button was clicked (default: 0).
+       optional integer clickCount
+ 
++  # Session-scoped guard for a managed WebContents. Browser toolbar events
++  # remain outside this target. Ends automatically on detach.
++  experimental command setOpenBrowserInputGuard
++    parameters
++      boolean enabled
++
++  # A physical press was ignored. No page coordinates or input are exposed.
++  experimental event openBrowserInputBlocked
++
+   # Ignores input events (useful while auditing page).
+   command setIgnoreInputEvents
+     parameters

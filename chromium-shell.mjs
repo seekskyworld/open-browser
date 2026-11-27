@@ -6,6 +6,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { tmpdir } from 'node:os';
 import { stateDir } from './paths.mjs';
 import { engineExecutable } from './runtime.mjs';
 import { chromiumPrivacyArgs } from './privacy-config.mjs';
@@ -32,7 +33,7 @@ async function macPersistentEngine() {
   const here = fileURLToPath(new URL('.', import.meta.url));
   const appCode = path.join('Contents', 'Resources', 'app');
   const packaged = path.normalize(here).endsWith(path.sep + appCode + path.sep);
-  const outer = packaged ? path.resolve(here, '../../..') : path.join(here, 'dist', 'open-browser.app');
+  const outer = packaged ? path.resolve(here, '../../..') : path.join(here, 'dist', isDevelopmentBuild ? 'open-browser-dev.app' : process.arch === 'x64' ? 'open-browser-x64.app' : 'open-browser.app');
   try {
     const engineDir = await realpath(path.join(outer, appCode, '.open-browser', 'engine'));
     const { version } = createRequire(import.meta.url)('playwright-core/package.json');
@@ -41,7 +42,7 @@ async function macPersistentEngine() {
     const executable = await realpath(path.resolve(engineDir, manifest.executable));
     const relative = path.relative(engineDir, executable);
     if (relative.startsWith('..' + path.sep) || path.isAbsolute(relative) ||
-        !relative.endsWith('/open-browser.app/Contents/MacOS/open-browser')) throw new Error('invalid branded engine path');
+        !relative.endsWith((isDevelopmentBuild ? '/open-browser-dev.app' : '/open-browser.app') + '/Contents/MacOS/open-browser')) throw new Error('invalid branded engine path');
     const { stderr } = await run('/usr/bin/codesign', ['-dv', '--verbose=2', outer]);
     const team = /^TeamIdentifier=([A-Z0-9]{10})$/m.exec(stderr)?.[1];
     if (!team) throw new Error('Developer ID team required');
@@ -111,53 +112,68 @@ async function seedProfile(profileDir) {
 }
 
 export async function launchChromiumShell({ profileDir = defaultProfile, headless = false, netLogPath } = {}) {
-  const executablePath = mac ? await macPersistentEngine() : await engineExecutable();
-  await prepareProfile(profileDir);
-  const preferences = path.join(profileDir, 'Default', 'Preferences');
-  const raw = await readFile(preferences,'utf8').catch(error => {
-    if (error.code !== 'ENOENT') throw error;
-    return '{}';
-  });
-  let stored;
-  try { stored = JSON.parse(raw); } catch { /* Chromium recovers malformed preferences. */ }
-  const context = await chromium.launchPersistentContext(profileDir, {
-    executablePath, headless, chromiumSandbox: true, viewport: null,
-    // Start with a local page so extensions and the profile initialize before
-    // the first visible tab is redirected to the open-browser cockpit.
-    ignoreDefaultArgs: ['--disable-extensions', '--disable-popup-blocking',
-      '--use-mock-keychain', '--password-store=basic'],
-    args: [...chromiumPrivacyArgs(), '--load-extension=' + extensionDir, '--window-size=1240,860',
-      ...(process.platform === 'linux' ? ['--class=open-browser', '--name=open-browser'] : []),
-      ...(netLogPath ? ['--log-net-log=' + netLogPath, '--net-log-capture-mode=Default'] : [])],
-  });
-  context.on('page', page => { void routeNewTab(page); });
-  if (stored?.bookmark_bar?.show_tab_groups !== false) {
-    // Let Chromium migrate its own live preference store; it also owns the
-    // user's bookmarks, toolbar visibility, and any concurrent profile writes.
-    const session = await context.browser().newBrowserCDPSession();
-    let targetId;
-    try {
-      const marker = 'about:blank#open-browser-settings-' + randomUUID();
-      const ready = context.waitForEvent('page', {predicate: page => page.url() === marker,timeout:10000});
-      const [page] = await Promise.all([ready, session.send('Target.createTarget',
-        {url:marker,background:true,focus:false}).then(target => { targetId = target.targetId; })]);
-      await page.goto('chrome://settings/appearance');
-      const applied = await page.evaluate(() => chrome.settingsPrivate.setPref('bookmark_bar.show_tab_groups',false,''));
-      if (!applied) throw new Error('无法设置书签栏的标签组显示方式。');
-    } catch (error) {
-      await context.close();
-      throw error;
-    } finally {
-      if (targetId) await session.send('Target.closeTarget',{targetId}).catch(() => {});
-      await session.detach().catch(() => {});
+  // A locally compiled Dev engine uses an ephemeral profile. It has a distinct
+  // executable identity and must never open an installed user's Keychain/profile.
+  const customEngine = isDevelopmentBuild && process.env.OPEN_BROWSER_DEV_CHROMIUM;
+  const executablePath = customEngine ? await realpath(customEngine)
+    : mac ? await macPersistentEngine() : await engineExecutable();
+  if (customEngine) profileDir = await mkdtemp(path.join(tmpdir(), 'open-browser-dev-input-'));
+  let context;
+  try {
+    await prepareProfile(profileDir);
+    const preferences = path.join(profileDir, 'Default', 'Preferences');
+    const raw = await readFile(preferences,'utf8').catch(error => {
+      if (error.code !== 'ENOENT') throw error;
+      return '{}';
+    });
+    let stored;
+    try { stored = JSON.parse(raw); } catch { /* Chromium recovers malformed preferences. */ }
+    context = await chromium.launchPersistentContext(profileDir, {
+      executablePath, headless, chromiumSandbox: true, viewport: null,
+      // Start with a local page so extensions and the profile initialize before
+      // the first visible tab is redirected to the open-browser cockpit.
+      ignoreDefaultArgs: ['--disable-extensions', '--disable-popup-blocking',
+        ...(!customEngine ? ['--use-mock-keychain', '--password-store=basic'] : [])],
+      args: [...chromiumPrivacyArgs(), '--load-extension=' + extensionDir, '--window-size=1240,860',
+        ...(process.platform === 'linux' ? ['--class=open-browser', '--name=open-browser'] : []),
+        ...(netLogPath ? ['--log-net-log=' + netLogPath, '--net-log-capture-mode=Default'] : [])],
+    });
+    context.on('page', page => { void routeNewTab(page); });
+    if (stored?.bookmark_bar?.show_tab_groups !== false) {
+      // Let Chromium migrate its own live preference store; it also owns the
+      // user's bookmarks, toolbar visibility, and any concurrent profile writes.
+      const session = await context.browser().newBrowserCDPSession();
+      let targetId;
+      try {
+        const marker = 'about:blank#open-browser-settings-' + randomUUID();
+        const ready = context.waitForEvent('page', {predicate: page => page.url() === marker,timeout:10000});
+        const [page] = await Promise.all([ready, session.send('Target.createTarget',
+          {url:marker,background:true,focus:false}).then(target => { targetId = target.targetId; })]);
+        await page.goto('chrome://settings/appearance');
+        const applied = await page.evaluate(() => chrome.settingsPrivate.setPref('bookmark_bar.show_tab_groups',false,''));
+        if (!applied) throw new Error('无法设置书签栏的标签组显示方式。');
+      } catch (error) {
+        await context.close();
+        throw error;
+      } finally {
+        if (targetId) await session.send('Target.closeTarget',{targetId}).catch(() => {});
+        await session.detach().catch(() => {});
+      }
     }
+    // Chromium starts a persistent context with an ordinary blank document.
+    // The first visible tab should use the same cockpit as subsequent new tabs.
+    const initialPage = context.pages()[0];
+    if (initialPage?.url() === 'about:blank') {
+      await initialPage.goto('chrome://newtab/', { waitUntil: 'domcontentloaded' });
+    }
+    await routeNewTab(initialPage);
+    if (customEngine) context.once('close', () => {
+      void rm(profileDir, { recursive: true, force: true, maxRetries: 4 }).catch(() => {});
+    });
+    return context;
+  } catch (error) {
+    await context?.close().catch(() => {});
+    if (customEngine) await rm(profileDir, {recursive:true, force:true, maxRetries:4}).catch(() => {});
+    throw error;
   }
-  // Chromium starts a persistent context with an ordinary blank document.
-  // The first visible tab should use the same cockpit as subsequent new tabs.
-  const initialPage = context.pages()[0];
-  if (initialPage?.url() === 'about:blank') {
-    await initialPage.goto('chrome://newtab/', { waitUntil: 'domcontentloaded' });
-  }
-  await routeNewTab(initialPage);
-  return context;
 }

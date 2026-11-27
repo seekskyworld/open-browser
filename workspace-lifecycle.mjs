@@ -51,6 +51,7 @@ export async function finish(service, ws, {operationId, keepPageIds, controlGene
         service.store.save(ws.owner, ws.id, digest, receipt, true);
         if (keep.has(tab.id) || !tab.createdByAgent) {
           await releaseInput(tab);
+          await service.setInputGuard?.(ws, tab, false);
           await service.releaseTab?.(tab.page, ws.id, tab.id);
           await tab.releasePopups?.();
           await tab.networkRelease?.();
@@ -83,7 +84,13 @@ export async function finish(service, ws, {operationId, keepPageIds, controlGene
       receipt.state = 'outcome_unknown';
       receipt.phase = 'outcome_unknown';
       receipt.error = 'inspect_before_retry';
-      ws.mode = 'human';
+      ws.mode = 'transferring';
+      try {
+        await setWorkspaceGuard(service, ws, false);
+        ws.mode = 'human';
+      } catch {
+        ws.unlockPending = true;
+      }
       ws.generation = randomUUID();
       service.notify(ws);
     } finally {
@@ -110,6 +117,14 @@ export async function handOff(service, ws, pageId, focus = true, expectedGenerat
   ws.handoff = (async () => {
     await Promise.allSettled([ws.tail,...ws.popupTasks]);
     for (const candidate of ws.pages.values()) clearRefs(candidate);
+    try {
+      await setWorkspaceGuard(service, ws, false);
+    } catch (error) {
+      ws.unlockPending = true;
+      service.notify(ws);
+      throw error;
+    }
+    ws.unlockPending = false;
     if (ws.mode !== 'transferring') fail('workspace_closed');
     ws.mode = 'human';
     service.store.event(ws.owner, ws.id, 'control', ws.mode);
@@ -120,6 +135,16 @@ export async function handOff(service, ws, pageId, focus = true, expectedGenerat
     return workspaceView(ws);
   })().finally(() => { ws.handoff = null; });
   return ws.handoff;
+}
+
+async function setWorkspaceGuard(service, ws, enabled) {
+  if (!service.setInputGuard) return;
+  const results = await Promise.allSettled([...ws.pages.values()].map(async tab => {
+    try { await service.setInputGuard(ws, tab, enabled); }
+    catch (error) { if (!tab.page.isClosed()) throw error; }
+  }));
+  const failed = results.find(result => result.status === 'rejected');
+  if (failed) throw failed.reason;
 }
 
 async function refreshControlGroups(service, ws) {
@@ -137,8 +162,26 @@ export async function returnToAgent(service, ws, expectedGeneration) {
   ws.generation = randomUUID();
   service.notify(ws);
   ws.returning = (async () => {
-    await ws.inputTail;
-    await Promise.all([...ws.pages.values()].map(releaseInput));
+    try {
+      await ws.inputTail;
+      await Promise.all([...ws.pages.values()].map(releaseInput));
+      ws.guardLost = false;
+      await setWorkspaceGuard(service, ws, true);
+      if (ws.guardLost) fail('input_guard_unavailable');
+    } catch (error) {
+      try { await setWorkspaceGuard(service, ws, false); }
+      catch (rollbackError) {
+        ws.unlockPending = true;
+        service.notify(ws);
+        throw rollbackError;
+      }
+      if (ws.mode === 'transferring') {
+        ws.mode = 'human';
+        service.store.event(ws.owner, ws.id, 'control', ws.mode);
+        service.notify(ws);
+      }
+      throw error;
+    }
     if (ws.mode !== 'transferring') fail('workspace_closed');
     // Returning control acknowledges that the user handled the visible site
     // verification. A later navigation or response can raise it again.

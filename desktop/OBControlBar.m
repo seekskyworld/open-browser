@@ -130,9 +130,12 @@ static NSString *Text(id value) { return [value isKindOfClass:NSString.class] ? 
 
 - (BOOL)frontMatches:(CGRect)bounds {
     NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
-    if (![front.bundleIdentifier isEqual:@"local.open-browser.chromium"] || front.hidden) return NO;
+    BOOL dev = [NSBundle.mainBundle.bundleIdentifier isEqual:@"local.open-browser.desktop-dev"];
+    NSString *engineID = dev ? @"local.open-browser-dev.chromium" : @"local.open-browser.chromium";
+    if (![front.bundleIdentifier isEqual:engineID] || front.hidden) return NO;
     NSString *path = front.executableURL.URLByResolvingSymlinksInPath.path;
-    return [path hasPrefix:self.rootPrefix] && [path hasSuffix:@"/open-browser.app/Contents/MacOS/open-browser"] &&
+    NSString *suffix = dev ? @"/open-browser-dev.app/Contents/MacOS/open-browser" : @"/open-browser.app/Contents/MacOS/open-browser";
+    return [path hasPrefix:self.rootPrefix] && [path hasSuffix:suffix] &&
            IsChildOfService(front.processIdentifier, self.servicePID) && FrontWindowMatches(front.processIdentifier, bounds);
 }
 
@@ -181,6 +184,7 @@ static NSString *Text(id value) { return [value isKindOfClass:NSString.class] ? 
     self.agent.stringValue = Text(bar[@"agentName"]).length ? bar[@"agentName"] : @"Agent";
     self.agent.toolTip = self.agent.stringValue;
     self.status.stringValue = transferring ? @"交接中" : human ? @"人工控制" : states[Text(bar[@"phase"])] ?: @"待命";
+    self.button.bezelColor = !human && !transferring && [bar[@"inputBlocked"] boolValue] ? NSColor.systemOrangeColor : nil;
     self.button.title = human ? @"交回 Agent" : @"人工接管";
     self.delivery.enabled = !transferring;
     self.button.enabled = !transferring && !self.pending;

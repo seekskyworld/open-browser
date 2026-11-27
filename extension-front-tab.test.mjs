@@ -37,6 +37,11 @@ test('the focused native tab must have its own host registration', async t => {
   assert.ok(Number.isInteger(active.windowId) && Number.isFinite(active.left) && Number.isFinite(active.top));
   assert.ok(active.width > 0 && active.height > 0 && active.viewportWidth > 0);
 
+  await worker.evaluate(() => globalThis.openBrowserInputHint('different-page'));
+  assert.equal((await front()).inputBlocked, undefined);
+  await worker.evaluate(id => globalThis.openBrowserInputHint(id), record.pageId);
+  assert.equal((await front()).inputBlocked, true);
+  assert.equal((await front()).mode, 'agent', 'a blocked click only hints at the takeover button');
   await ordinary.bringToFront();
   await worker.evaluate(async groupId => {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });

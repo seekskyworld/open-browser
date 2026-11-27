@@ -90,6 +90,7 @@ export function workspaceView(ws, includeCredentialRequest = false) {
   return { workspaceId: ws.id, profileId: serviceProfileId, name: ws.name, agentName: ws.agentName, mode: ws.mode, controlGeneration: ws.generation, pages,
     ...(includeCredentialRequest && {pendingDialogs: [...ws.pages.values()].flatMap(tab=>tab.dialog ? [tab.dialog.info] : [])}),
     ...(includeCredentialRequest && { blockedOrigins: [...ws.blockedOrigins.values()] }),
+    ...(ws.mode === 'transferring' && ws.unlockPending && {unlockPending:true}),
     activity: { phase, queued: queued.length, needsCredential: !!request,
       needsHumanVerification: !!ws.securityChallenge,
       ...(ws.securityChallenge && { securityChallenge: { ...ws.securityChallenge } }), current, recent,

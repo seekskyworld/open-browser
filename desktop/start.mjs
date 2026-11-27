@@ -23,7 +23,7 @@ async function wakeExisting() {
 
 if (await wakeExisting()) process.exit(0);
 
-if (process.platform === 'darwin') {
+if (process.platform === 'darwin' && !(isDevelopmentBuild && process.env.OPEN_BROWSER_DEV_CHROMIUM)) {
   const bundleName = isDevelopmentBuild ? 'open-browser-dev.app' : process.arch === 'x64' ? 'open-browser-x64.app' : 'open-browser.app';
   const bundle = fileURLToPath(new URL('../dist/' + bundleName, import.meta.url));
   if (!existsSync(bundle)) await import('./build.mjs');

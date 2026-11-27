@@ -1,7 +1,7 @@
 'use strict';
 
 importScripts('workspace-title.js', 'tab-action.js');
-globalThis.openBrowserGroupVersion = 10;
+globalThis.openBrowserGroupVersion = 11;
 
 const groupsInProgress = new Map();
 
@@ -75,6 +75,7 @@ globalThis.openBrowserRelease = ({workspaceId,pageId}) => forWorkspace(workspace
   await chrome.storage.session.remove(mappingKey);
 });
 
+let inputHint;
 globalThis.openBrowserFrontTab = async function () {
   // A single browser snapshot keeps the active tab and its native window bounds together.
   const win = await chrome.windows.getLastFocused({ populate: true }).catch(() => null);
@@ -89,8 +90,32 @@ globalThis.openBrowserFrontTab = async function () {
       !record.pageId || !record.controlGeneration) return null;
   const { workspaceId, pageId, controlGeneration, mode, agentName, phase } = record;
   return { workspaceId, pageId, controlGeneration, mode, agentName: agentName || 'Agent', phase: phase || 'idle',
+    ...(inputHint?.pageId === pageId && inputHint.generation === controlGeneration &&
+      mode === 'agent' && inputHint.until > Date.now() && { inputBlocked: true }),
     dispatchState: record.dispatchState || null,
     windowId, left, top, width, height, viewportWidth: tab.width };
+};
+
+globalThis.openBrowserInputHint = async function (pageId) {
+  const front = await globalThis.openBrowserFrontTab();
+  if (front?.pageId !== pageId || front.mode !== 'agent' || front.inputBlocked) return;
+  const hint = {pageId, generation:front.controlGeneration, until:Date.now() + 1500};
+  inputHint = hint;
+  markFrontTabChanged();
+  const [tab] = await chrome.tabs.query({active:true, windowId:front.windowId});
+  const record = tab && (await chrome.storage.session.get(tabKey(tab.id)))[tabKey(tab.id)];
+  if (record?.pageId === pageId && record.mode === 'agent') {
+    showRunning(tab.id, false);
+    await chrome.action.setBadgeText({tabId:tab.id, text:'接管'}).catch(() => {});
+  }
+  setTimeout(async () => {
+    if (hint === inputHint) inputHint = null;
+    markFrontTabChanged();
+    if (record) await forWorkspace(record.workspaceId, async () => {
+      const current = (await chrome.storage.session.get(tabKey(tab.id)))[tabKey(tab.id)];
+      if (current?.pageId === pageId) await writeAction(tab.id, current);
+    }).catch(() => {});
+  }, 1500);
 };
 
 let frontTabRevision = 0;

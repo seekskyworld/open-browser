@@ -121,8 +121,8 @@ function render(w) {
   const pages = w.pages || [];
   if (!pages.some(p => p.pageId === selectedTab)) selectedTab = pages.at(-1)?.pageId || '';
   options(el('pages'), pages.map((p, i) => [p.pageId, (i+1) + ' · ' + (p.title || p.origin || '页面')]), selectedTab);
-  el('control').textContent = w.mode === 'human' ? '交回 Agent' : '接管此页';
-  el('control').disabled = busy || w.mode === 'transferring' || (!selectedTab && w.mode !== 'human');
+  el('control').textContent = w.unlockPending ? '重试人工接管' : w.mode === 'human' ? '交回 Agent' : '接管此页';
+  el('control').disabled = busy || (w.mode === 'transferring' && !w.unlockPending) || (!selectedTab && w.mode !== 'human');
   el('uploads').hidden = w.mode!=='agent' || !selectedTab;
   el('upload-origin').textContent = pages.find(p=>p.pageId===selectedTab)?.origin || '';
   showCredential(w.mode === 'agent' ? w.activity?.credentialRequest || null : null);

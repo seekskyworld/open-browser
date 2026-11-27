@@ -1,6 +1,8 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 
+import { isDevelopmentBuild } from './build-profile.mjs';
+import { managedInput } from './managed-input.mjs';
 import { pageActivity } from './page-activity.mjs';
 import { desktopCapabilities } from './capability-matrix.mjs';
 
@@ -51,7 +53,7 @@ export async function chromiumHost(context) {
   };
   let initial = await worker();
   const currentVersion = host => evaluateWorker(host, () => globalThis.openBrowserGroupVersion);
-  if (await currentVersion(initial) !== 10) {
+  if (await currentVersion(initial) !== 11) {
     // A persistent Chromium profile can start the previous cached MV3 worker.
     const replacement = context.waitForEvent('serviceworker', { predicate: isHost, timeout: 10000 });
     try {
@@ -62,11 +64,16 @@ export async function chromiumHost(context) {
       // Chromium can defer the replacement worker until its next profile launch.
       throw Object.assign(new Error('工作区扩展已请求更新', { cause }), { code: 'extension_reload' });
     }
-    if (await currentVersion(initial) !== 10) throw new Error('请重新构建 open-browser 工作区扩展。');
+    if (await currentVersion(initial) !== 11) throw new Error('请重新构建 open-browser 工作区扩展。');
   }
   let stopped = false;
   let lastState;
   const effects = pageActivity();
+  const guarded = isDevelopmentBuild && !!process.env.OPEN_BROWSER_DEV_CHROMIUM;
+  const setInputGuard = guarded ? managedInput(context, tab => {
+    void worker().then(host => evaluateWorker(host, pageId => globalThis.openBrowserInputHint(pageId), tab.id))
+      .catch(() => {});
+  }) : undefined;
   let revision = 0, wakeSync;
   function changed() { revision++; wakeSync?.(); }
   const allowed = new Set(desktopCapabilities);
@@ -157,6 +164,7 @@ export async function chromiumHost(context) {
     await call(front.mode === 'agent' ? 'takeControl' : 'returnToAgent', { workspaceId, pageId, controlGeneration });
   }
   return {
+    setInputGuard,
     onActionTarget(event) { if (!stopped) effects.target(event); },
     onActivity(view) { if (!stopped) { effects.update(view); changed(); } },
     async groupTab(page, workspaceId, name, mode, agentName, pageId) {
