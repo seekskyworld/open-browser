@@ -94,6 +94,34 @@ export class BrowserService {
     this.notifier.notify(ws);
   }
 
+  invalidateObservation(tab) {
+    if (tab) tab.observationCache = undefined;
+  }
+
+  async observationRevision(tab) {
+    try {
+      return await tab.page.evaluate(() => {
+        const key = '__openBrowserObservationRevision';
+        if (!Number.isSafeInteger(window[key])) {
+          window[key] = 1;
+          const ignored = node => node?.closest?.('[data-open-browser-activity],[data-open-browser-target],[data-open-browser-agent-cursor],[data-open-browser-label]');
+          const observer = new MutationObserver(records => {
+            if (records.some(record => {
+              if (record.type === 'attributes' && ignored(record.target)) return false;
+              if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(ignored)) return false;
+              return true;
+            })) window[key]++;
+          });
+          observer.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+          Object.defineProperty(window, '__openBrowserObservationObserver', { value: observer, configurable: true });
+        }
+        return window[key];
+      });
+    } catch {
+      return null;
+    }
+  }
+
   notifyTarget(ws, tab, el, documentId, controlGeneration, origin, actionKind = '操作') {
     if (!this.onActionTarget) return;
     const ticket = Symbol();
@@ -112,6 +140,8 @@ export class BrowserService {
       const target = { workspaceId: ws.id, pageId: tab.id, documentId, controlGeneration,
         x: (left + right) / 2, y: (top + bottom) / 2, origin };
       Object.defineProperty(target, 'actionKind', { value: actionKind, enumerable: false });
+      this.store.event(ws.owner, ws.id, 'action', 'running', null, null,
+        { pageId: tab.id, resourceId: String(actionKind).slice(0, 64) });
       return this.onActionTarget(target);
     }).catch(() => {});
   }
@@ -259,6 +289,7 @@ export class BrowserService {
       case 'openPage': return this.enqueue(ws, job => this.open(ws, params.url, job), { kind: 'openPage' });
       case 'observe': return this.enqueue(ws, () => this.observe(ws, this.tab(ws, params.pageId), params),
         { kind: 'observe', pageId: params.pageId });
+      case 'observeAndAct': return this.observeAndAct(ws, params);
       case 'act': return this.act(ws, params);
       case 'setCredential': return this.setCredential(ws, params);
       case 'resolveCredential': {
@@ -408,6 +439,7 @@ export class BrowserService {
       tab.title = '';
       ws.securityChallenge = null;
       tab.documentId = randomUUID();
+      this.invalidateObservation(tab);
       clearRefs(tab);
       this.notify(ws);
       if (tab.heldKeys.size || tab.heldButtons.size)
@@ -672,6 +704,7 @@ export class BrowserService {
     const key = target + '\n' + credentialRef;
     if (ws.credentials.size >= 128 && !ws.credentials.has(key)) fail('credential_limit');
     ws.credentials.set(key, value);
+    for (const tab of ws.pages.values()) this.invalidateObservation(tab);
     for (const [pageId, request] of ws.credentialRequests) {
       if (request.origin === target && request.credentialRef === credentialRef)
         ws.credentialRequests.delete(pageId);
@@ -689,7 +722,7 @@ export class BrowserService {
     this.requireControl(ws, generation);
     if (documentId !== tab.documentId) fail('stale_observation');
     requirePageOrigin(ws, tab);
-    return { workspaceId: ws.id, pageId: tab.id, documentId, controlGeneration: generation,
+    return { workspaceId: ws.id, pageId: tab.id, observationId: randomUUID(), documentId, controlGeneration: generation,
       text: redact(ws, text) };
   }
 
@@ -814,6 +847,13 @@ export class BrowserService {
     options.padding=Math.max(0,...Array.from(ws.credentials.values(),v=>v.length-1));
     requirePageOrigin(ws,tab);
     const documentId=tab.documentId,controlGeneration=ws.generation,frameRevision=tab.frameRevision;
+    const cacheable = !readOnly && !request.cursor && !request.name && !request.region && !request.locator &&
+      !request.includeFrames && !request.frameControls && request.limit === 180;
+    const revision = cacheable ? await this.observationRevision(tab) : null;
+    if (cacheable && revision !== null && tab.observationCache?.documentId === documentId &&
+        tab.observationCache.controlGeneration === controlGeneration && tab.observationCache.revision === revision) {
+      return { ...tab.observationCache.payload, observationId: randomUUID(), blockedRequests: blockedRequests(tab.page) };
+    }
     const check=()=>{
       this.requireControl(ws,controlGeneration);
       requirePageOrigin(ws,tab);
@@ -828,7 +868,7 @@ export class BrowserService {
       this.requireControl(ws, controlGeneration);
       requirePageOrigin(ws, tab);
       if (tab.documentId !== documentId || ws.pages.get(tab.id) !== tab || tab.page.isClosed()) fail('stale_observation');
-      return { workspaceId: ws.id, pageId: tab.id, documentId, controlGeneration, text:observationText(ws,text,textWindowInfo),
+      return { workspaceId: ws.id, pageId: tab.id, observationId: randomUUID(), documentId, controlGeneration, text:observationText(ws,text,textWindowInfo),
         elements:details.map(({role,name,options,...state})=>({role,name:redact(ws,name),...state})),
         ...(foreground && {foreground:{...foreground,name:redact(ws,foreground.name)}}), ...observationMatch(ws,match), ...this.continuation(tab,ws,true,request,next,frameResult?.next),
         ...(frames && {frames}), blockedRequests: blockedRequests(tab.page) };
@@ -871,15 +911,32 @@ export class BrowserService {
       nodes = undefined;
       handles = undefined;
       void previousNodes?.dispose().catch(() => {});
-      tab.lastObservation={documentId,controlGeneration,text:observationText(ws,text,textWindowInfo),elements};
-      return {workspaceId:ws.id,pageId:tab.id,...tab.lastObservation,
+      tab.lastObservation={observationId: randomUUID(), documentId,controlGeneration,text:observationText(ws,text,textWindowInfo),elements};
+      const result = {workspaceId:ws.id,pageId:tab.id,...tab.lastObservation,
         ...(foreground && {foreground:{...foreground,name:redact(ws,foreground.name)}}), ...observationMatch(ws,match), ...this.continuation(tab,ws,false,request,next,frameResult?.next),
         ...(frames && { frames }), blockedRequests: blockedRequests(tab.page) };
+      if (cacheable && revision !== null)
+        tab.observationCache = { documentId, controlGeneration, revision, payload: result };
+      return result;
     } finally {
       if(!published && frameResult) for(const {handle} of frameResult.refs.values()) void handle.dispose().catch(()=>{});
       const release = [snapshot, nodes, freshNodes, ...(handles?.values() ?? [])].filter(Boolean);
       await Promise.all(release.map(handle => handle.dispose().catch(() => {})));
     }
+  }
+
+  async observeAndAct(ws, params) {
+    const tab = this.tab(ws, params.pageId);
+    const { workspaceId, pageId, operationId, actions, timeoutMs, observeAfter,
+      documentId, controlGeneration, ...observeParams } = params;
+    if (workspaceId !== ws.id || documentId !== undefined || controlGeneration !== undefined)
+      fail('invalid_params');
+    const observation = await this.enqueue(ws, () => this.observe(ws, tab, observeParams),
+      { kind: 'observe', pageId: tab.id });
+    const receipt = this.act(ws, { workspaceId: ws.id, pageId: tab.id, operationId,
+      documentId: observation.documentId, controlGeneration: observation.controlGeneration,
+      actions, timeoutMs, observeAfter });
+    return { observation, receipt };
   }
 
   actionDigest(params) {

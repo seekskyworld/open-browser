@@ -18,7 +18,11 @@ function notify(message) {
 
 function friendlyError(error) {
   const code = error?.message || '';
-  if (code === 'host_unavailable' || code === 'host_timeout') return 'open-browser 服务未连接，请先启动应用后点击刷新。';
+  if (code === 'host_unavailable' || code === 'host_timeout') return code === 'host_timeout'
+    ? 'open-browser 已收到请求，但服务响应超时，请检查应用后重试。'
+    : 'open-browser 服务未连接，请先启动应用后点击刷新。';
+  if (code === 'extension_worker_timeout') return 'open-browser 扩展响应超时，请重新加载扩展或重启应用。';
+  if (code === 'extension_unavailable') return 'open-browser 工作区扩展未运行，请重新启动应用。';
   return code || '暂时无法读取 Agent 状态，请点击刷新重试。';
 }
 
@@ -38,6 +42,42 @@ function line(text, className = '') {
   return node;
 }
 
+function eventLabel(event) {
+  const state = event.state || 'unknown';
+  const steps = Number.isInteger(event.completedSteps) ? ` · ${event.completedSteps} 步` : '';
+  const operation = event.operationId ? ` · ${event.operationId.slice(0, 8)}` : '';
+  return `${event.kind || '事件'} · ${phases[state] || state}${steps}${operation}`;
+}
+
+async function showEvents(workspaceId, host) {
+  const timeline = host.querySelector('.timeline');
+  if (!timeline) return;
+  if (!timeline.hidden) {
+    timeline.hidden = true;
+    return;
+  }
+  timeline.hidden = false;
+  timeline.replaceChildren(line('正在读取记录…', 'detail'));
+  try {
+    const result = await call('listEvents', { workspaceId, after: 0, limit: 24 });
+    const events = result?.events || [];
+    timeline.replaceChildren(...(events.length
+      ? events.map(event => line(eventLabel(event), 'timeline-row'))
+      : [line('暂无可显示的脱敏事件。', 'detail')]));
+  } catch (error) {
+    timeline.replaceChildren(line(friendlyError(error), 'detail'));
+  }
+}
+
+function recordButton(workspaceId, host) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'quiet record-button';
+  button.textContent = '查看记录';
+  button.onclick = () => void showEvents(workspaceId, host);
+  return button;
+}
+
 function renderWorkspaces(items) {
   el('workspace-count').textContent = items.length ? `${items.length} 个` : '';
   el('empty').hidden = items.length > 0;
@@ -54,6 +94,10 @@ function renderWorkspaces(items) {
     const agent = line(workspace.agentName || 'Agent', 'agent-name');
     card.append(title, agent, status, detail);
     if (needsTaskName(workspace)) card.append(line('请为此任务命名', 'name-hint'));
+    const timeline = document.createElement('div');
+    timeline.className = 'timeline';
+    timeline.hidden = true;
+    card.append(recordButton(workspace.workspaceId, card), timeline);
     return card;
   }));
 }
@@ -84,7 +128,13 @@ function renderHistory(items) {
     meta.append(line(phases[item.state] || item.state || '已完成', `history-state ${item.state || ''}`));
     const time = formatTime(item.updatedAt || item.createdAt);
     if (time) meta.append(line(time, 'detail'));
-    row.append(main, meta);
+    const timeline = document.createElement('div');
+    timeline.className = 'timeline';
+    timeline.hidden = true;
+    const actions = document.createElement('div');
+    actions.className = 'history-actions';
+    actions.append(recordButton(item.workspaceId, row));
+    row.append(main, meta, actions, timeline);
     return row;
   }));
 }

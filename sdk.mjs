@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { request } from 'node:http';
+import { Agent, request } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { pathsForProfile, profileId } from './paths.mjs';
 
@@ -46,6 +46,7 @@ export class OpenBrowserClient {
     const selected = pathsForProfile(options.profileId ?? profileId);
     this.socketPath = options.socketPath ?? selected.socketPath;
     this.tokenPath = options.tokenPath ?? process.env.OPEN_BROWSER_CLIENT_TOKEN_FILE ?? selected.tokenPath;
+    this.agent = options.agent ?? new Agent({ keepAlive: true, maxSockets: 4 });
     const codex = process.env.CODEX_THREAD_ID || process.env.CODEX_SESSION_ID;
     this.agentName = options.agentName ?? (process.env.OPEN_BROWSER_AGENT_NAME?.trim() ||
       (codex ? 'Codex' : options.fallbackName ?? 'SDK'));
@@ -61,7 +62,7 @@ export class OpenBrowserClient {
       throw new OpenBrowserError('TASK_NAME_REQUIRED', '创建 Agent 任务时必须提供非空任务名称 name。');
     if (['createWorkspace','open'].includes(method) && params.agentName === undefined)
       params = { ...params, agentName: this.agentName };
-    return localRequest(this.socketPath,this.tokenPath,'/v1/call',method,params);
+    return localRequest(this.socketPath,this.tokenPath,'/v1/call',method,params,this.agent);
   }
   async capabilities() {
     try { return await this.call('capabilities'); }
@@ -98,6 +99,14 @@ export class OpenBrowserClient {
   getWorkspace(workspaceId) { return this.call('getWorkspace', { workspaceId }); }
   openPage(workspaceId, url) { return this.call('openPage', { workspaceId, url }); }
   observe(page) { return this.call('observe', page); }
+  observeAndAct(page, request = {}) {
+    const { actions, observeAfter, timeoutMs, operationId = randomUUID(), ...observeOptions } = request;
+    if (!Array.isArray(actions) || actions.length === 0)
+      return Promise.reject(new OpenBrowserError('INVALID_PARAMS', 'observeAndAct 需要至少一个 action。'));
+    return this.call('observeAndAct', {
+      ...page, ...observeOptions, actions, observeAfter, timeoutMs, operationId,
+    });
+  }
   /** Open one URL and immediately return its first observation. */
   async openAndObserve(options = {}, observeOptions = {}) {
     const page = await this.open(options);
@@ -106,16 +115,7 @@ export class OpenBrowserClient {
   }
   /** Observe immediately before acting, while preserving document and control checks. */
   async actAfterObserve(page, request = {}) {
-    const { actions, observeAfter, timeoutMs, operationId = randomUUID() } = request;
-    if (!Array.isArray(actions) || actions.length === 0)
-      throw new OpenBrowserError('INVALID_PARAMS', 'actAfterObserve 需要至少一个 action。');
-    const observation = await this.observe(page);
-    const receipt = await this.act({
-      ...page,
-      documentId: observation.documentId,
-      controlGeneration: observation.controlGeneration,
-    }, { actions, observeAfter, timeoutMs, operationId });
-    return { observation, receipt };
+    return this.observeAndAct(page, request).then(({ observation, receipt }) => ({ observation, receipt }));
   }
   runWorkflow(page, request) { return this.call('runWorkflow',{...request,...page}); }
   act(page, operation) { return this.call('act', { ...operation, ...page }); }
@@ -128,9 +128,10 @@ export class OpenBrowserClient {
   }
   handOff(workspaceId) { return this.call('handOff', { workspaceId }); }
   closeWorkspace(workspaceId) { return this.call('closeWorkspace', { workspaceId }); }
+  close() { this.agent.destroy(); }
 }
 
-export async function localRequest(socket, credentials, endpoint, method, params) {
+export async function localRequest(socket, credentials, endpoint, method, params, agent) {
     const body = JSON.stringify({ method, params });
     let token;
     try {
@@ -149,6 +150,7 @@ export async function localRequest(socket, credentials, endpoint, method, params
           'content-type': 'application/json',
           'content-length': Buffer.byteLength(body),
         },
+      agent,
       }, res => {
         let data = '';
         res.setEncoding('utf8');

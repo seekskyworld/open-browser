@@ -107,6 +107,8 @@ export interface OutputChunk {
   data: string;
 }
 export interface PageObservation extends PageHandle {
+  /** Unique identifier for this observation payload. */
+  observationId: string;
   documentId: string;
   /** Changes whenever workspace control changes hands, even without navigation. */
   controlGeneration: string;
@@ -198,6 +200,8 @@ export interface OpenBrowserV1 {
   getWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
   openPage(workspaceId: string, url: string): Promise<PageHandle>;
   observe(page: PageHandle & ObserveOptions): Promise<PageObservation>;
+  /** SDK convenience. Observes and queues an action batch through one service request. */
+  observeAndAct(page: PageHandle & ObserveOptions, request: {actions: readonly PageAction[];operationId?:string;observeAfter?:'full'|'delta';timeoutMs?:number}): Promise<{observation:PageObservation;receipt:OperationReceipt}>;
   runWorkflow(page:PageHandle,request:WorkflowRequest):Promise<OperationReceipt>;
   act(page: PageHandle, request: {
     operationId: string;

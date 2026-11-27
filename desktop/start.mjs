@@ -1,6 +1,26 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import net from 'node:net';
+import { pidPath, socketPath } from '../paths.mjs';
+
+async function wakeExisting() {
+  try {
+    const pid = Number(readFileSync(pidPath, 'utf8').trim());
+    if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+    process.kill(pid, 0);
+    const active = await new Promise(resolve => {
+      const probe = net.connect(socketPath);
+      probe.once('connect', () => { probe.destroy(); resolve(true); });
+      probe.once('error', () => resolve(false));
+    });
+    if (!active) return false;
+    process.kill(pid, 'SIGUSR2');
+    return true;
+  } catch { return false; }
+}
+
+if (await wakeExisting()) process.exit(0);
 
 if (process.platform === 'darwin') {
   const bundle = fileURLToPath(new URL('../dist/open-browser.app', import.meta.url));

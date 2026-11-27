@@ -163,6 +163,15 @@ test('SDK convenience helpers keep fresh observation metadata and idempotent fin
   api.observe = async handle => ({ ...handle, documentId: 'doc-2', controlGeneration: 'generation-2', text: 'Ready' });
   let submitted;
   api.act = async (handle, request) => { submitted = { handle, request }; return { operationId: request.operationId, state: 'completed' }; };
+  api.observeAndAct = async (handle, request) => {
+    const observation = await api.observe(handle);
+    const receipt = await api.act({ ...handle, documentId: observation.documentId,
+      controlGeneration: observation.controlGeneration }, {
+        ...request,
+        operationId: request.operationId ?? '00000000-0000-4000-8000-000000000000',
+      });
+    return { observation, receipt };
+  };
   const opened = await api.openAndObserve({ url: 'https://example.org' });
   assert.equal(opened.observation.documentId, 'doc-2');
   const acted = await api.actAfterObserve(page, { actions: [{ kind: 'click', ref: 'button-1' }] });

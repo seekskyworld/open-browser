@@ -93,6 +93,35 @@ globalThis.openBrowserFrontTab = async function () {
     windowId, left, top, width, height, viewportWidth: tab.width };
 };
 
+let frontTabRevision = 0;
+const frontTabWaiters = new Set();
+function markFrontTabChanged() {
+  frontTabRevision++;
+  for (const resolve of frontTabWaiters) resolve(frontTabRevision);
+  frontTabWaiters.clear();
+}
+chrome.tabs.onActivated.addListener(markFrontTabChanged);
+chrome.windows.onFocusChanged.addListener(markFrontTabChanged);
+chrome.tabs.onRemoved.addListener(markFrontTabChanged);
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status || changeInfo.groupId !== undefined || changeInfo.windowId !== undefined) markFrontTabChanged();
+});
+globalThis.openBrowserWaitFrontTabChange = function (after) {
+  if (!Number.isSafeInteger(after) || frontTabRevision !== after) return Promise.resolve(frontTabRevision);
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      frontTabWaiters.delete(done);
+      resolve(frontTabRevision);
+    }, 3000);
+    const done = value => {
+      clearTimeout(timer);
+      frontTabWaiters.delete(done);
+      resolve(value);
+    };
+    frontTabWaiters.add(done);
+  });
+};
+
 globalThis.openBrowserDelivery = async target => {
   const [tab] = await chrome.tabs.query({active:true,windowId:target.windowId});
   if (!tab) return;
@@ -126,11 +155,25 @@ globalThis.openBrowserShow = async function () {
   return (await chrome.windows.create({ focused: true })).id;
 };
 
-const newtabMethods = new Set(['listWorkspaces', 'listAgentHistory']);
+const newtabMethods = new Set(['listWorkspaces', 'listAgentHistory', 'listEvents']);
 const methods = new Set(['listUploads','grantUpload','revokeUpload','respondDialog','listDownloads','cancelDownload','keepDownload','visualStatus','listOperations','listEvents', 'listWorkspaces', 'getWorkspace', 'takeControl', 'returnToAgent', 'grantOrigin', 'resolveCredential', 'finishWorkspace']);
 const pending = new Map();
 const queued = [];
 let waiting;
+
+function hostFailure(request) {
+  if (request?.dispatchedAt) return {
+    code: 'host_timeout',
+    message: 'open-browser 扩展已收到请求，但本机服务未在时限内返回。请检查服务状态后重试。',
+  };
+  return {
+    code: 'host_unavailable',
+    message: 'open-browser 扩展未连接到本机服务，请先启动应用后重试。',
+  };
+}
+
+// Kept on the worker for the new-tab diagnostics and focused integration tests.
+globalThis.openBrowserClassifyHostFailure = hostFailure;
 
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   const source = sender.url?.split('#')[0];
@@ -155,17 +198,27 @@ function hostRequest(method, params) {
       pending.delete(id);
       const index = queued.findIndex(request => request.id === id);
       if (index >= 0) queued.splice(index, 1);
-      reject(new Error('host_timeout'));
+      const failure = hostFailure(request);
+      const error = new Error(failure.message);
+      error.code = failure.code;
+      reject(error);
     }, 60_000);
     pending.set(id, { resolve, reject, timer });
     const request = { id, method, params };
-    if (waiting) waiting(request);
+    if (waiting) {
+      request.dispatchedAt = Date.now();
+      waiting(request);
+    }
     else queued.push(request);
   });
 }
 
 globalThis.openBrowserNext = function () {
-  if (queued.length) return queued.shift();
+  if (queued.length) {
+    const request = queued.shift();
+    request.dispatchedAt = Date.now();
+    return request;
+  }
   if (waiting) waiting(null);
   return new Promise(resolve => {
     const timer = setTimeout(() => waiting(null), 3000);

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { socketPath, adminTokenPath } from './paths.mjs';
 import { localRequest, agentMethods, OpenBrowserClient, OpenBrowserError } from './sdk.mjs';
 
@@ -13,6 +14,8 @@ const help = `open-browser <method> [< params.json]
   printf '%s\\n' '{"workspaceId":"WORKSPACE_ID","pageId":"PAGE_ID"}' | open-browser observe
   printf '%s\\n' '{"workspaceId":"WORKSPACE_ID","operationId":"finish-UNIQUE-ID","keepPageIds":[]}' | open-browser finishWorkspace
 
+  open-browser session   # 每行读取 {"id":1,"method":"observe","params":{...}}，直到 stdin 关闭
+
   echo '{"name":"网页检查","agentName":"研究助手"}' | node cli.mjs createWorkspace
   echo '{"url":"https://example.org","name":"网页检查"}' | node cli.mjs open
   node cli.mjs listWorkspaces
@@ -23,7 +26,23 @@ const help = `open-browser <method> [< params.json]
 需要完整参数契约时运行：node cli.mjs --schema
 本机管理命令：admin.pair、admin.list、admin.grant、admin.revoke、admin.revokeClient、admin.clearHistory、admin.scheduler、admin.setPixelPermission。
 凭据在可信的本地控制台设置；使用 fillCredential 和 credentialRef 填写登录字段。
+  open-browser skill       # 输出与当前包版本匹配的 Skill 指南
 `;
+
+async function printSkillGuide() {
+  const platform = process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : null;
+  const candidates = platform
+    ? [`skills/open-browser/SKILL.${platform}.md`, 'skills/open-browser/SKILL.md']
+    : ['skills/open-browser/SKILL.md'];
+  for (const relative of candidates) {
+    try {
+      const guide = await readFile(new URL(relative, import.meta.url), 'utf8');
+      process.stdout.write(guide.endsWith('\n') ? guide : guide + '\n');
+      return;
+    } catch {}
+  }
+  throw new OpenBrowserError('SKILL_GUIDE_NOT_FOUND', `未找到 Skill 指南。已检查：${candidates.join('、')}`);
+}
 
 async function readParams() {
   const chunks = [];
@@ -40,11 +59,50 @@ async function readParams() {
   catch { throw new OpenBrowserError('INVALID_JSON', '标准输入必须是 JSON 对象。'); }
 }
 
+async function sessionMain() {
+  const api = new OpenBrowserClient({ fallbackName: 'CLI session' });
+  const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
+  let tail = Promise.resolve();
+  const send = frame => process.stdout.write(JSON.stringify(frame) + '\n');
+  input.on('line', line => {
+    tail = tail.then(async () => {
+      let frame;
+      try { frame = JSON.parse(line); } catch { send({ id: null, error: { code: 'INVALID_JSON', message: '每行必须是 JSON 请求。' } }); return; }
+      const id = frame?.id;
+      if (!(typeof id === 'string' || Number.isSafeInteger(id)) || typeof frame?.method !== 'string' || !frame.method ||
+          (frame.params !== undefined && (!frame.params || typeof frame.params !== 'object' || Array.isArray(frame.params)))) {
+        send({ id: id ?? null, error: { code: 'INVALID_PARAMS', message: 'session 请求需要 id、method 和对象 params。' } });
+        return;
+      }
+      try {
+        const result = await api.call(frame.method, frame.params ?? {});
+        send({ id, result: result ?? null });
+      } catch (error) {
+        send({ id, error: { code: error.code ?? 'CLI_ERROR', message: error.message,
+          ...(error.nextAction ? { nextAction: error.nextAction } : {}) } });
+      }
+    });
+  });
+  await new Promise(resolve => input.once('close', resolve));
+  await tail;
+  api.close();
+}
+
 async function main() {
   const [method, ...extra] = process.argv.slice(2);
+  if (method === 'session') {
+    if (extra.length) throw new OpenBrowserError('INVALID_PARAMS', 'session 不接受额外参数。');
+    await sessionMain();
+    return;
+  }
   if (method === '--schema') {
     const { tools } = await import('./api-contract.mjs');
     process.stdout.write(JSON.stringify(tools, null, 2) + '\n');
+    return;
+  }
+  if (method === 'skill') {
+    if (extra.length) throw new OpenBrowserError('INVALID_PARAMS', 'skill 不接受额外参数。');
+    await printSkillGuide();
     return;
   }
   if (!method || method === '--help' || method === '-h') {

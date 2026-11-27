@@ -55,11 +55,13 @@ node --test service.integration.test.mjs
 CLI 和 MCP 都通过同一个 SDK 调用本机 API。服务端使用 Playwright Core 驱动专用 Chromium，并在各入口之间共享页面、权限和操作回执。
 每个新工作区都必须填写清晰的 `name` 任务名称，该名称会显示在 Agent 控制台、原生侧栏和浏览器标签组中。
 
-Scoped npm 包提供同一套实现的三个入口。运行 `npm install @seekskyworld/open-browser` 后，使用 `open-browser` 调用 CLI，使用 `open-browser-mcp` 配置 MCP stdio 服务，使用 `open-browser-skill` 作为 Agent Skill 命令。JavaScript 客户端可以从 `@seekskyworld/open-browser` 导入 `OpenBrowserClient`。
+Scoped npm 包提供同一套实现的多个入口。运行 `npm install @seekskyworld/open-browser` 后，使用 `open-browser` 调用 CLI，使用 `open-browser-mcp` 配置 MCP stdio 服务，或使用 `open-browser-mcp-http` 启动经过 Bearer 认证的本机回环 MCP 地址。JavaScript 客户端可以从 `@seekskyworld/open-browser` 导入 `OpenBrowserClient`。
 
-Agent 使用 [open-browser Skill](skills/open-browser/SKILL.md) 时，通过 `skills/open-browser/scripts/open-browser` 调用 CLI。Skill 会在需要时启动本机 open-browser 应用或便携服务，等待就绪后自动重试一次。设置 `OPEN_BROWSER_AUTOSTART=0` 可要求服务必须已运行。希望先打开桌面窗口时，也可以手动启动应用或执行 `npm start`。
+Agent 使用 [open-browser Skill](skills/open-browser/SKILL.md) 时，通过 `skills/open-browser/scripts/open-browser` 调用 CLI。Skill 会在需要时启动本机 open-browser 应用或便携服务，等待就绪后自动重试一次。设置 `OPEN_BROWSER_AUTOSTART=0` 可要求服务必须已运行。希望先打开桌面窗口时，也可以手动启动应用或执行 `npm start`。运行 `open-browser skill` 可以直接输出当前安装包对应平台的 Skill 指南，不会启动服务。
 
 首次运行 Skill 或本机服务时，open-browser 会检测已经存在的 Codex、Claude Code、Cursor、Windsurf、Gemini CLI、Cline、Roo Code 和 OpenCode Skill 目录，并在其中创建 `open-browser` 相对符号链接。已有文件和非 open-browser 符号链接会保留。Windsurf 的标准目录 `~/.codeium/windsurf/skills` 和旧版目录 `~/.windsurf/skills` 都支持。设置 `OPEN_BROWSER_AUTO_INSTALL_SKILLS=0` 可关闭自动安装，也可以通过 `OPEN_BROWSER_AGENT_SKILL_DIRS` 路径列表补充其他 Agent 的 Skill 目录。
+
+需要 URL 形式 MCP 配置时，可运行 `open-browser-mcp-http`。它只监听本机回环地址 `/mcp`，默认读取当前 profile 的 token 作为 Bearer 认证，端口可用 `OPEN_BROWSER_MCP_HTTP_PORT` 设置。
 
 先打开应用或执行 `npm start`。在项目根目录运行 `node cli.mjs createWorkspace` 创建工作区，运行 `node cli.mjs listWorkspaces` 查看结果。带参数的命令通过标准输入传入 JSON。`node cli.mjs --help` 列出全部方法。
 
@@ -69,7 +71,9 @@ Agent 使用 [open-browser Skill](skills/open-browser/SKILL.md) 时，通过 `sk
 printf '%s\n' '{"url":"https://example.org","name":"网页检查"}' | node cli.mjs open
 ```
 
-SDK 还提供 `openAndObserve(options)`、`actAfterObserve(page, { actions })` 和 `finish(workspaceId, keepPageIds)`。这些辅助方法减少参数拼接，同时仍使用最新文档 ID、控制代次、工作区权限和幂等操作回执。
+SDK 还提供 `openAndObserve(options)`、`observeAndAct(page, { actions })`、`actAfterObserve(page, { actions })` 和 `finish(workspaceId, keepPageIds)`。观察和动作可以通过一次服务请求完成，同时仍使用最新文档 ID、控制代次、工作区权限和幂等操作回执。
+
+连续任务可以运行 `open-browser session`，按行发送带 `id`、`method` 和 `params` 的 JSON。该模式复用一个 Node 客户端和本地连接，减少每个动作的进程启动成本。
 
 需要跨多步复用工作区时，使用完整的 SDK 生命周期。
 

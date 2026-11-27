@@ -245,10 +245,18 @@ export async function observeFrames(page, origins, redact, padding=0) {
   let remaining = 8000;
   // Direct visible child frames only. A blank or opaque sandbox has no
   // explicit HTTP(S) origin. No cross-frame action handles leave this helper.
-  for (const frame of page.mainFrame().childFrames().slice(0, 16)) {
-    if (!remaining || !origins.has(URL.parse(frame.url())?.origin)) continue;
+  const candidates = page.mainFrame().childFrames().slice(0, 16)
+    .filter(frame => origins.has(URL.parse(frame.url())?.origin));
+  const allowed = (await Promise.all(candidates.map(async frame => {
+    try { return await frameAllowed(frame, origins) ? frame : null; }
+    catch (error) {
+      if (!frame.isDetached() && !/context was destroyed|navigat/i.test(error.message)) throw error;
+      return null;
+    }
+  }))).filter(Boolean);
+  for (const frame of allowed) {
+    if (!remaining) break;
     try {
-      if (!(await frameAllowed(frame,origins))) continue;
       const data=await frame.evaluate(inspectDocument,{textOnly:true,origins:[...origins],textLimit:remaining,padding});
       if (data && origins.has(data.origin) && URL.parse(frame.url())?.origin === data.origin) {
         const text = redact(data.text,data.textWindowInfo);

@@ -84,6 +84,14 @@ const definitions = {
     locator:object({role:id,name:id,within:object({role:id,name:id})},['role','name']),
     cursor:id, limit:{type:'integer',minimum:1,maximum:180}, name:id, region,
   }, Object.keys(page)],
+  observeAndAct: ['Observe the current page and submit an ordered action batch through one service request. The service binds the actions to the returned document and control generation before queueing them.', {
+    ...page, includeFrames:{type:'boolean'}, frameControls:{type:'boolean'},
+    locator:object({role:id,name:id,within:object({role:id,name:id})},['role','name']),
+    cursor:id, limit:{type:'integer',minimum:1,maximum:180}, name:id, region,
+    operationId:id, timeoutMs:{type:'integer',minimum:1,maximum:60000},
+    observeAfter:{enum:['full','delta']},
+    actions:{type:'array',minItems:1,maxItems:32,items:action},
+  }, ['workspaceId','pageId','operationId','actions']],
   act: ['Submit ordered actions for the observed document and control generation. Use fillCredential for login secrets. Supply a unique operationId. The optional timeout is a wall-clock budget shared by queueing and execution. After a timeout or outcome_unknown, query the receipt and verify the site before retrying.', {
     ...page, operationId: id, documentId: id, controlGeneration: id,
     timeoutMs:{type:'integer',minimum:1,maximum:60000},

@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { launchBrowser } from './control.mjs';
 import { agentMethods } from './sdk.mjs';
 import { BrowserService } from './engine-service.mjs';
-import { socketPath, stateDir, tokenPath, adminTokenPath } from './paths.mjs';
+import { socketPath, stateDir, tokenPath, adminTokenPath, pidPath } from './paths.mjs';
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -90,6 +90,7 @@ export async function startApplication({ headless = false, mode = 'service', onS
   let ready = false;
   let closing;
   let showing;
+  let pidWritten = false;
 
   async function openControlWindow() {
     if (shell) return shell.show();
@@ -152,6 +153,8 @@ export async function startApplication({ headless = false, mode = 'service', onS
       if ((await readFile(tokenPath, 'utf8').catch(() => '')).trim() === token)
         await unlink(tokenPath).catch(() => {});
       if ((await readFile(adminTokenPath, 'utf8').catch(() => '')).trim() === adminToken) await unlink(adminTokenPath).catch(() => {});
+      if (pidWritten && (await readFile(pidPath, 'utf8').catch(() => '')).trim() === String(process.pid))
+        await unlink(pidPath).catch(() => {});
       const serverClosed = new Promise(resolve => server.close(resolve));
       server.closeAllConnections();
       try {
@@ -218,6 +221,10 @@ export async function startApplication({ headless = false, mode = 'service', onS
       await writeFile(temporary, value + '\n', { mode: 0o600, flag: 'wx' });
       await rename(temporary, file);
     }
+    const temporaryPid = pidPath + '.' + process.pid;
+    await writeFile(temporaryPid, String(process.pid) + '\n', { mode: 0o600, flag: 'wx' });
+    await rename(temporaryPid, pidPath);
+    pidWritten = true;
     ready = true;
     shell?.start(hostCall, onBar);
     browser.once('disconnected', () => { void close(); });

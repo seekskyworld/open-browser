@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -123,6 +123,28 @@ test('a CLI-created page survives process exit and can be observed by an authori
   } finally {
     await mcp.close();
     await app?.close();
+    if (original === undefined) delete process.env.OPEN_BROWSER_STATE_DIR;
+    else process.env.OPEN_BROWSER_STATE_DIR = original;
+    await rm(stateDir, { recursive: true, force: true });
+  }
+});
+
+test('a second service for the same profile is rejected without disturbing the owner', async () => {
+  const stateDir = await mkdtemp(path.join(tmpdir(), 'ob-single-owner-'));
+  const original = process.env.OPEN_BROWSER_STATE_DIR;
+  let app;
+  try {
+    process.env.OPEN_BROWSER_STATE_DIR = stateDir;
+    const { startApplication } = await import('./service.mjs');
+    const paths = await import('./paths.mjs');
+    app = await startApplication({ headless: true, mode: 'web' });
+    assert.equal((await readFile(paths.pidPath, 'utf8')).trim(), String(process.pid));
+    await assert.rejects(startApplication({ headless: true, mode: 'web' }), error =>
+      error?.code === 'EADDRINUSE');
+    assert.equal((await readFile(paths.pidPath, 'utf8')).trim(), String(process.pid));
+  } finally {
+    await app?.close();
+    await assert.rejects(readFile(path.join(stateDir, 'open-browser.pid')));
     if (original === undefined) delete process.env.OPEN_BROWSER_STATE_DIR;
     else process.env.OPEN_BROWSER_STATE_DIR = original;
     await rm(stateDir, { recursive: true, force: true });

@@ -12,6 +12,14 @@ const advice = new Map([
   ['run_timeout',['budget','inspect_progress']],
   ['stale_ref',['stale_target','observe_again']],
   ['stale_document',['navigation','observe_again']],
+  ['target_missing',['target','observe_again']],
+  ['target_ambiguous',['target','narrow_locator']],
+  ['origin_denied',['permission','grant_origin']],
+  ['invalid_actions',['input','read_schema']],
+  ['invalid_params',['input','read_schema']],
+  ['browser_action_failed',['browser','observe_again']],
+  ['page_not_found',['page','list_workspaces']],
+  ['service_restarted',['recovery','inspect_progress']],
 ]);
 const states = new Set(['queued','running','failed','completed','cancelled','outcome_unknown']);
 export function operationDiagnostic(receipt, dispatched) {

@@ -49,6 +49,9 @@ test('observation cursors bind identity, role, page document and control while r
   assert.deepEqual((await observe({region:{x:1,y:1,width:30,height:15}})).elements.map(e=>e.name),['Inside']);
   assert.deepEqual((await observe({name:'OUTSIDE'})).elements.map(e=>e.name),['Outside']);
   let first=await observe({limit:1});
+  const freshObservation = await observe();
+  assert.match(freshObservation.observationId,/^[0-9a-f-]{36}$/);
+  assert.notEqual(freshObservation.observationId,first.observationId);
   await page.reload();
   await assert.rejects(observe({cursor:first.nextCursor}),{code:'stale_cursor'});
   first=await observe({limit:1});

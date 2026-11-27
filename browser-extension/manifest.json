@@ -23,9 +23,6 @@
       "128": "icons/open-browser-128.png"
     }
   },
-  "chrome_url_overrides": {
-    "newtab": "newtab.html"
-  },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'"
   },

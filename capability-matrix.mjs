@@ -12,7 +12,7 @@ export const desktopCapabilities = Object.freeze([
   'listDownloads', 'cancelDownload', 'keepDownload', 'visualStatus',
   'diagnoseOperation', 'listWorkspaces', 'getWorkspace', 'takeControl',
   'returnToAgent', 'resolveCredential', 'grantOrigin', 'finishWorkspace',
-  'listOperations', 'listAgentHistory', 'closeWorkspace', 'showPage',
+  'listOperations', 'listEvents', 'eventCursor', 'listAgentHistory', 'closeWorkspace', 'showPage',
 ]);
 
 export const capabilityProfiles = Object.freeze({

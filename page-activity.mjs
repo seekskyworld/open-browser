@@ -77,13 +77,26 @@ function paintTarget(x, y, origin, actionKind = '操作') {
 
 async function paint(tab, fn, args, current) {
   if (!current() || tab.page.isClosed() || !/^https?:/.test(tab.page.url())) return;
-  const { frameTree } = await tab.session.send('Page.getFrameTree');
-  const { executionContextId } = await tab.session.send('Page.createIsolatedWorld', {
-    frameId: frameTree.frame.id, worldName: 'open-browser-activity',
-  });
+  let executionContextId = tab.context?.navigation === tab.navigation ? tab.context.id : undefined;
+  if (!executionContextId) {
+    const { frameTree } = await tab.session.send('Page.getFrameTree');
+    const created = await tab.session.send('Page.createIsolatedWorld', {
+      frameId: frameTree.frame.id, worldName: 'open-browser-activity',
+    });
+    executionContextId = created.executionContextId;
+    tab.context = { navigation: tab.navigation, id: executionContextId };
+  }
   if (!current()) return;
-  await tab.session.send('Runtime.evaluate', { contextId: executionContextId,
-    expression: '(' + fn.toString() + ')(...' + JSON.stringify(args) + ')' });
+  try {
+    await tab.session.send('Runtime.evaluate', { contextId: executionContextId,
+      expression: '(' + fn.toString() + ')(...' + JSON.stringify(args) + ')' });
+  } catch (error) {
+    if (tab.context?.id === executionContextId && /context|execution|target/i.test(error.message)) {
+      tab.context = undefined;
+      return paint(tab, fn, args, current);
+    }
+    throw error;
+  }
 }
 
 export function pageActivity() {
@@ -105,7 +118,7 @@ export function pageActivity() {
       const tab = { page, session, workspaceId, origin: null, revision: 0, pending: Promise.resolve() };
       tabs.set(pageId, tab);
       tab.navigation = 0;
-      tab.navigated = frame => { if (frame === page.mainFrame()) tab.navigation++; };
+      tab.navigated = frame => { if (frame === page.mainFrame()) { tab.navigation++; tab.context = undefined; } };
       page.on('framenavigated',tab.navigated);
       tab.loaded = () => { if (tab.origin) render(tab, tab.origin, true); };
       page.on('domcontentloaded',tab.loaded);
@@ -119,6 +132,7 @@ export function pageActivity() {
       tab.mode = 'released';
       tab.generation = null;
       tab.revision++;
+      tab.context = undefined;
       tab.page.off('framenavigated',tab.navigated);
       tab.page.off('domcontentloaded',tab.loaded);
       tab.page.off('close',tab.closed);
@@ -145,8 +159,8 @@ export function pageActivity() {
       const tab = tabs.get(pageId);
       if (!tab || tab.workspaceId !== workspaceId) return;
       const navigation = tab.navigation;
-      void paint(tab, paintTarget, [x, y, origin, actionKind], () => tab.generation === controlGeneration &&
-        tab.navigation === navigation && tab.mode === 'agent').catch(() => {});
+      tab.pending = tab.pending.then(() => paint(tab, paintTarget, [x, y, origin, actionKind], () =>
+        tab.generation === controlGeneration && tab.navigation === navigation && tab.mode === 'agent')).catch(() => {});
     },
     has(pageId) { return tabs.has(pageId); },
   };

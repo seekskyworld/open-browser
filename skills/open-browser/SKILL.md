@@ -3,7 +3,9 @@ name: open-browser
 description: 用户要求用 open-browser 浏览、观察页面、操作工作区或验证登录时，通过 open-browser CLI 控制其独立 Chromium。
 ---
 
-在 macOS 和 Linux 使用本 Skill 目录内的 `scripts/open-browser`，在 Windows 使用 `scripts/open-browser.cmd`。便携包中的 Skill 位于 `app/skills/open-browser/`，其启动脚本使用包内 Node。下文以 `$ob` 表示它的绝对路径。命令名是第一个参数，其余参数从标准输入读取 JSON，标准输出也是 JSON。运行 `"$ob" --help` 查看方法。首次调用会探测本机服务，必要时自动启动 open-browser 应用或便携包并等待就绪后重试一次。设置 `OPEN_BROWSER_AUTOSTART=0` 可关闭自动启动。该引导只使用本机 socket 或命名管道，不需要配置 MCP 地址。
+在 macOS 和 Linux 使用本 Skill 目录内的 `scripts/open-browser`，在 Windows 使用 `scripts/open-browser.cmd`。便携包中的 Skill 位于 `app/skills/open-browser/`，其启动脚本使用包内 Node。下文以 `$ob` 表示它的绝对路径。命令名是第一个参数，其余参数从标准输入读取 JSON，标准输出也是 JSON。运行 `"$ob" --help` 查看方法。首次调用会探测本机服务，必要时自动启动 open-browser 应用或便携包并等待就绪后重试一次。设置 `OPEN_BROWSER_AUTOSTART=0` 可关闭自动启动。该引导只使用本机 socket 或命名管道，不需要配置 MCP 地址。连续任务可运行 `"$ob" session`，它按行读取 `{\"id\":1,\"method\":\"observe\",\"params\":{...}}`，复用同一个 Node 客户端直到标准输入关闭。
+
+运行 `open-browser skill` 可以输出当前安装包对应平台的完整指南，不会启动服务。需要 URL 形式 MCP 配置时使用 `open-browser-mcp-http`，它只监听回环地址并要求 profile token 的 Bearer 认证。
 
 ## 最短路径
 
@@ -21,7 +23,7 @@ printf '%s\n' '{"workspaceId":"WORKSPACE_ID","pageId":"PAGE_ID"}' | "$ob" observ
 
 遇到错误时按返回的 `code` 和 `nextAction` 处理。`stale_ref`、`stale_document`、`stale_control` 和 `stale_observation` 先重新 `observe`。`target_ambiguous` 用 `observe.locator` 缩小范围。`target_obscured` 等待遮罩消失后用新的操作号重试。`origin_denied` 先核对 `blockedOrigins`，取得工作区控制权后再用 `grantOrigin`。`human_verification_required` 表示站点要求安全验证，停止重试，调用 `handOff`，让用户在可见页面完成验证后再调用 `returnToAgent` 并重新 `observe`。`REQUEST_TIMEOUT`、`run_timeout`、`outcome_unknown` 或 `inspect_before_retry` 先用同一个 `operationId` 查询回执并核对站点结果。
 
-若只使用 SDK，可用 `openAndObserve` 省去首次句柄拼接，用 `actAfterObserve` 自动以最新文档和控制代次执行一批动作，用 `finish` 自动生成交付操作号。这些辅助方法仍执行服务端的工作区权限、来源和过期引用检查。
+若只使用 SDK，可用 `openAndObserve` 省去首次句柄拼接，用 `observeAndAct` 或 `actAfterObserve` 在一次服务请求中完成最新观察和动作提交，用 `finish` 自动生成交付操作号。这些辅助方法仍执行服务端的工作区权限、来源和过期引用检查。连续任务优先复用同一个 SDK 客户端，避免每个动作重新启动 CLI。
 
 1. 运行 `"$ob" listWorkspaces </dev/null`。继续已有任务时使用该任务的工作区。新任务通过 `createWorkspace` 创建，必须填写清晰的 `name` 任务名称，并保存返回的 `workspaceId`。`name` 填任务名称，`agentName` 填创建者的显示名（最多 80 个 Unicode 码点）。多个子代理并行时，每个子代理须显式传自己的名字。同一客户端的子代理通常共享环境或 MCP 握手，只能由子代理自身区分身份。
 2. 调用 `openPage`，传入 `workspaceId` 和目标 `url`，保存返回的页面句柄。把完整句柄传给 `observe`，读取可见文本、元素的 `role/name/ref`、`documentId` 和 `controlGeneration`。

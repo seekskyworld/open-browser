@@ -18,6 +18,7 @@
   "bin": {
     "open-browser": "cli.mjs",
     "open-browser-mcp": "mcp.mjs",
+    "open-browser-mcp-http": "mcp-http.mjs",
     "open-browser-skill": "skills/open-browser/scripts/open-browser"
   },
   "exports": {
@@ -39,6 +40,7 @@
     "release:verify-macos": "node desktop/verify-macos-release.mjs",
     "cli": "node cli.mjs",
     "mcp": "node mcp.mjs",
+    "mcp:http": "node mcp-http.mjs",
     "package:check": "npm pack --dry-run",
     "browser:install": "node runtime.mjs",
     "control": "node control.mjs",

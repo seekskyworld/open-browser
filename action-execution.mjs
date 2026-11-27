@@ -109,22 +109,27 @@ async function waitActionable(service, ws, tab, op, el, kind, documentId, genera
     ensureBudget(op);
     service.requireControl(ws, generation);
     if (tab.documentId !== documentId) fail('stale_document');
-    const visible = await el.isVisible();
-    if (!visible && await el.evaluate(node => !node.isConnected)) fail('stale_ref');
     const pointerAction = ['click', 'doubleClick', 'hover', 'drag', 'press', 'scroll'].includes(kind);
-    if (visible && pointerAction && await el.isEnabled()) {
-      // Trial performs Chromium's hit and stability checks without sending the click.
-      // A background tab may need several animation frames before stability is known.
+    if (pointerAction) {
+      // Trial performs Chromium's hit, visibility, enabled and stability checks in
+      // one Playwright call. Avoid separate visibility and enabled RPCs for the
+      // common pointer path.
       try {
         if (kind === 'hover') await el.hover({ trial: true, timeout: Math.max(1, deadline - Date.now()) });
         else await el.click({ trial: true, timeout: Math.max(1, deadline - Date.now()) });
         return;
       } catch (error) {
         if (error.name !== 'TimeoutError') throw error;
+        if (!await el.evaluate(node => node.isConnected).catch(() => false)) fail('stale_ref');
         if (op.cancel) fail('operation_cancelled');
-        fail(error.message.includes('intercepts pointer events') ? 'target_obscured' : 'target_not_actionable');
+        if (Date.now() >= deadline)
+          fail(error.message.includes('intercepts pointer events') ? 'target_obscured' : 'target_not_actionable');
+        await delay(40, undefined, {signal:op.controller.signal});
+        continue;
       }
     }
+    const visible = await el.isVisible();
+    if (!visible && await el.evaluate(node => !node.isConnected)) fail('stale_ref');
     if (visible && !pointerAction && await el.isEditable()) return;
     if (Date.now() >= deadline) fail('timeout');
     await delay(40, undefined, {signal:op.controller.signal});
@@ -215,7 +220,6 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
     const frameEntry=tab.frameRefs.get(action.ref);
     const el=frameEntry?.handle ?? tab.refs.get(action.ref);
     if (!el) fail('stale_ref');
-    await service.checkSemanticTarget(ws,tab,action.ref,frameEntry,el,action.kind==='upload' ? 'click' : action.kind);
     let destination;
     if (action.kind === 'drag') {
       const destinationFrame = tab.frameRefs.get(action.toRef);
@@ -245,6 +249,7 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
         if (frameEntry) fail('file_origin_mismatch');
         try { ws.uploads.get(ws,tab,action.fileId); } catch(error) { fail(error.code); }
         await waitActionable(service, ws,tab,op,el,'click',documentId,controlGeneration);
+        await service.checkSemanticTarget(ws,tab,action.ref,frameEntry,el,'click');
         await chooseGrantedFile(ws,tab,el,action.fileId,
           ()=>beforeDispatch(service, ws,tab,op,documentId,controlGeneration),
           ()=>{ service.requireControl(ws,controlGeneration); if (op.cancel) fail('operation_cancelled'); });
@@ -344,6 +349,7 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
       return;
     }
     receipt.completedSteps++;
+    service.invalidateObservation?.(tab);
     receipt.phase = 'verifying';
     op.dispatched = false;
     service.store.save(ws.owner, ws.id, op.digest, receipt);

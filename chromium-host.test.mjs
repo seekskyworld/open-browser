@@ -22,6 +22,7 @@ test('Chromium new-tab cockpit shows running agents and history only', async () 
   let showUnnamed = false;
     host.start(async (method, params) => {
       if (method === 'listAgentHistory') return [{ workspaceId: 'history', agentName: '历史 Agent', name: '已完成任务', state: 'completed', createdAt: Date.now(), recentOperation: { kind: 'act', state: 'completed', completedSteps: 2 } }];
+      if (method === 'listEvents') return { events: [{ kind: 'operation', state: 'completed', operationId: 'history-op', completedSteps: 2 }], nextCursor: 1 };
     if (method === 'listWorkspaces' && showUnnamed) return [{ workspaceId: 'unnamed', agentName: 'Agent', name: '', mode: 'agent', pages: [], activity: {} }];
       return call(method, params);
     });
@@ -32,6 +33,8 @@ test('Chromium new-tab cockpit shows running agents and history only', async () 
     await newtab.locator('#empty').waitFor();
     assert.match(await newtab.locator('#empty').innerText(), /当前没有正在运行的 Agent/);
     await newtab.getByText('历史 Agent · 已完成任务').waitFor();
+    await newtab.getByRole('button', { name: '查看记录' }).last().click();
+    await newtab.getByText(/operation · 已完成 · 2 步 · history-/).waitFor();
     assert.match(await newtab.locator('#agent-prompt').inputValue(), /open-browser Skill/);
     assert.equal(await newtab.locator('#copy-prompt').innerText(), '复制提示词');
     await newtab.locator('#copy-prompt').click();
@@ -71,5 +74,25 @@ test('existing Chromium profiles hide saved group chips while retaining bookmark
   } finally {
     await context?.close();
     await rm(profileDir,{recursive:true,force:true});
+  }
+});
+
+test('native new tabs route to the cockpit without an extension new-tab override', async () => {
+  const stateDir = await mkdtemp(path.join(tmpdir(), 'open-browser-new-tab-route-'));
+  let context;
+  try {
+    context = await launchChromiumShell({ profileDir: path.join(stateDir, 'profile'), headless: true });
+    const session = await context.browser().newBrowserCDPSession();
+    const created = context.waitForEvent('page', { timeout: 10_000 });
+    await session.send('Target.createTarget', { url: 'chrome://newtab/', background: true, focus: false });
+    const page = await created;
+    await page.waitForURL(`chrome-extension://${extensionId}/newtab.html`);
+    const ordinary = await context.newPage();
+    await ordinary.goto('data:text/html,<title>ordinary</title>');
+    assert.equal(await ordinary.title(), 'ordinary');
+    await session.detach();
+  } finally {
+    await context?.close();
+    await rm(stateDir, { recursive: true, force: true });
   }
 });

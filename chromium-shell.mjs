@@ -16,6 +16,16 @@ const extensionId = 'ehmdmliolflappfnmopemgojhbiilmpl';
 const mac = process.platform === 'darwin';
 const defaultProfile = path.join(stateDir, mac ? 'open-browser-profile-v2' : 'open-browser-profile');
 const run = promisify(execFile);
+const cockpitUrl = `chrome-extension://${extensionId}/newtab.html`;
+
+async function routeNewTab(page) {
+  try {
+    if (!['chrome://newtab/', 'chrome://newtab', 'chrome://new-tab-page/'].includes(page.url())) return;
+    await page.goto(cockpitUrl, { waitUntil: 'domcontentloaded' });
+  } catch {
+    // A tab can be closed while Chromium is creating it. The browser remains usable.
+  }
+}
 
 async function macPersistentEngine() {
   const here = fileURLToPath(new URL('.', import.meta.url));
@@ -119,6 +129,7 @@ export async function launchChromiumShell({ profileDir = defaultProfile, headles
       ...(process.platform === 'linux' ? ['--class=open-browser', '--name=open-browser'] : []),
       ...(netLogPath ? ['--log-net-log=' + netLogPath, '--net-log-capture-mode=Default'] : [])],
   });
+  context.on('page', page => { void routeNewTab(page); });
   if (stored?.bookmark_bar?.show_tab_groups !== false) {
     // Let Chromium migrate its own live preference store; it also owns the
     // user's bookmarks, toolbar visibility, and any concurrent profile writes.
@@ -146,5 +157,6 @@ export async function launchChromiumShell({ profileDir = defaultProfile, headles
   if (initialPage?.url() === 'about:blank') {
     await initialPage.goto('chrome://newtab/', { waitUntil: 'domcontentloaded' });
   }
+  await routeNewTab(initialPage);
   return context;
 }

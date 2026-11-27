@@ -55,9 +55,11 @@ To open the desktop browser, run `npm start`. The first macOS desktop build requ
 The CLI and MCP server use the same SDK to call the local API. The service drives Chromium through Playwright Core and shares page state, permissions and operation receipts across clients.
 Every new workspace must include a clear `name` task label. The label appears in the Agent console, native sidebar and browser tab group.
 
-The scoped npm package exposes the same implementation through separate entry points. Install it with `npm install @seekskyworld/open-browser`. Run `open-browser` for CLI calls, configure `open-browser-mcp` as an MCP stdio server, or run `open-browser-skill` from an Agent Skill. JavaScript clients can import `OpenBrowserClient` from `@seekskyworld/open-browser`.
+The scoped npm package exposes the same implementation through separate entry points. Install it with `npm install @seekskyworld/open-browser`. Run `open-browser` for CLI calls, configure `open-browser-mcp` as an MCP stdio server, or run `open-browser-mcp-http` for an authenticated loopback MCP endpoint. JavaScript clients can import `OpenBrowserClient` from `@seekskyworld/open-browser`.
 
-Agents using the [open-browser Skill](skills/open-browser/SKILL.md) call the CLI through `skills/open-browser/scripts/open-browser`. The Skill starts the local open-browser app or portable service when needed and retries once after it becomes ready. Set `OPEN_BROWSER_AUTOSTART=0` to require an already running service. Start the app manually or run `npm start` when you want to open the desktop window before creating a task. Pass method arguments as JSON on standard input. Use `node cli.mjs --help` to list methods.
+Agents using the [open-browser Skill](skills/open-browser/SKILL.md) call the CLI through `skills/open-browser/scripts/open-browser`. The Skill starts the local open-browser app or portable service when needed and retries once after it becomes ready. Set `OPEN_BROWSER_AUTOSTART=0` to require an already running service. Start the app manually or run `npm start` when you want to open the desktop window before creating a task. Pass method arguments as JSON on standard input. Use `node cli.mjs --help` to list methods. Run `open-browser skill` to print the platform-matched guide without starting the service.
+
+The optional `open-browser-mcp-http` command binds only to loopback, uses the profile token as Bearer authentication, and serves `/mcp` for clients that require URL-based MCP configuration. Set `OPEN_BROWSER_MCP_HTTP_PORT` to choose a port.
 
 On the first Skill or service start, open-browser detects existing Skill directories for Codex, Claude Code, Cursor, Windsurf, Gemini CLI, Cline, Roo Code and OpenCode. It creates an `open-browser` relative symlink in each detected directory, preserving existing files and links. Windsurf's standard `~/.codeium/windsurf/skills` directory and its legacy `~/.windsurf/skills` directory are both supported. Set `OPEN_BROWSER_AUTO_INSTALL_SKILLS=0` to disable this behavior. Add agent-specific Skill directories with the `OPEN_BROWSER_AGENT_SKILL_DIRS` path-list variable.
 
@@ -67,7 +69,9 @@ For one explicit URL, an agent can use one `open` call to create a workspace and
 printf '%s\n' '{"url":"https://example.org","name":"Page check"}' | node cli.mjs open
 ```
 
-The SDK also provides `openAndObserve(options)`, `actAfterObserve(page, { actions })` and `finish(workspaceId, keepPageIds)`. These helpers reduce request assembly while preserving fresh document IDs, control generations, workspace permissions and idempotent operation receipts.
+The SDK also provides `openAndObserve(options)`, `observeAndAct(page, { actions })`, `actAfterObserve(page, { actions })` and `finish(workspaceId, keepPageIds)`. Observation and action submission can use one service request while preserving fresh document IDs, control generations, workspace permissions and idempotent operation receipts.
+
+For continuous tasks, run `open-browser session` and send one JSON request per line with `id`, `method` and `params`. The session reuses one Node client and local connection to avoid process startup on every action.
 
 For multi-step work, use the full SDK lifecycle.
 

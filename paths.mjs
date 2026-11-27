@@ -13,8 +13,8 @@ export function pathsForProfile(id) {
   const socketPath = process.platform === 'win32'
     ? '\\\\.\\pipe\\open-browser-' + instance
     : Buffer.byteLength(socketFile) < 100 ? socketFile : path.join('/tmp', 'open-browser-' + process.getuid() + '-' + instance + '.sock');
-  return {stateDir, socketPath, tokenPath:path.join(stateDir, 'open-browser.token')};
+  return {stateDir, socketPath, tokenPath:path.join(stateDir, 'open-browser.token'), pidPath:path.join(stateDir, 'open-browser.pid')};
 }
 
-export const {stateDir, socketPath, tokenPath} = pathsForProfile(profileId);
+export const {stateDir, socketPath, tokenPath, pidPath} = pathsForProfile(profileId);
 export const adminTokenPath = path.join(stateDir, 'open-browser-admin.token');
