@@ -69,11 +69,20 @@ export async function chromiumHost(context) {
   let stopped = false;
   let lastState;
   const effects = pageActivity();
-  const guarded = isDevelopmentBuild && !!process.env.OPEN_BROWSER_DEV_CHROMIUM;
+  const configuredGuard = process.env.OPEN_BROWSER_INPUT_GUARD?.trim().toLowerCase();
+  // Development builds opt into the stock-Chromium fallback so the guard can
+  // be exercised without a Chromium rebuild. Stable builds stay opt-in until
+  // their native Chromium patch is shipped. `off` remains an explicit
+  // diagnostics override.
+  const guardMode = configuredGuard || (isDevelopmentBuild ? 'fallback' : 'off');
+  if (!['off', 'fallback', 'native'].includes(guardMode))
+    throw extensionError('invalid_input_guard_mode', 'OPEN_BROWSER_INPUT_GUARD 必须是 off、fallback 或 native。');
+  const guarded = guardMode !== 'off';
   const setInputGuard = guarded ? managedInput(context, tab => {
-    void worker().then(host => evaluateWorker(host, pageId => globalThis.openBrowserInputHint(pageId), tab.id))
-      .catch(() => {});
-  }) : undefined;
+    void worker().then(host => globalThis.openBrowserInputHint
+      ? evaluateWorker(host, pageId => globalThis.openBrowserInputHint(pageId), tab.id)
+      : undefined).catch(() => {});
+  }, { allowFallback: guardMode === 'fallback', forceFallback: guardMode === 'fallback' }) : undefined;
   let revision = 0, wakeSync;
   function changed() { revision++; wakeSync?.(); }
   const allowed = new Set(desktopCapabilities);
@@ -165,6 +174,8 @@ export async function chromiumHost(context) {
   }
   return {
     setInputGuard,
+    withAgentInput: setInputGuard?.withAgentInput,
+    inputGuardMode: guarded ? guardMode : 'off',
     onActionTarget(event) { if (!stopped) effects.target(event); },
     onActivity(view) { if (!stopped) { effects.update(view); changed(); } },
     async groupTab(page, workspaceId, name, mode, agentName, pageId, controlGeneration, preserveGroup) {

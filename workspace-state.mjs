@@ -98,6 +98,7 @@ export function workspaceView(ws, includeCredentialRequest = false) {
     ...(includeCredentialRequest && {pendingDialogs: [...ws.pages.values()].flatMap(tab=>tab.dialog ? [tab.dialog.info] : [])}),
     ...(includeCredentialRequest && { blockedOrigins: [...ws.blockedOrigins.values()] }),
     ...(ws.mode === 'transferring' && ws.unlockPending && {unlockPending:true}),
+    security: { inputGuard: ws.inputGuardMode || 'unavailable' },
     activity: { phase, queued: queued.length, needsCredential: !!request,
       needsHumanVerification: !!ws.securityChallenge,
       ...(ws.securityChallenge && { securityChallenge: { ...ws.securityChallenge } }), current, recent,

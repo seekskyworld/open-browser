@@ -7,6 +7,12 @@ description: 用户要求用 open-browser 浏览、观察页面、操作工作�
 
 在 macOS 和 Linux 使用本 Skill 目录内的 `scripts/open-browser`，在 Windows 使用 `scripts/open-browser.cmd`。便携包中的 Skill 位于 `app/skills/open-browser/`，其启动脚本使用包内 Node。下文以 `$ob` 表示它的绝对路径。命令名是第一个参数，其余参数从标准输入读取 JSON，标准输出也是 JSON。运行 `"$ob" --help` 查看方法。首次调用会探测本机服务，必要时自动启动 open-browser 应用或便携包并等待就绪后重试一次。设置 `OPEN_BROWSER_AUTOSTART=0` 可关闭自动启动。该引导只使用本机 socket 或命名管道，不需要配置 MCP 地址。连续任务可运行 `"$ob" session`，它按行读取 `{\"id\":1,\"method\":\"observe\",\"params\":{...}}`，复用同一个 Node 客户端直到标准输入关闭。
 
+## Agent 控制时的输入保护
+
+工作区进入 `agent` 状态后，受管页面内容区域会锁定人工鼠标、触控板和键盘输入。Agent 每个写入动作结束后立即恢复锁定。地址栏、标签栏和工作区控制条仍可使用。通过页面底部的 **人工接管** 进入人工状态，完成后点击 **交回 Agent**，再重新 `observe`。
+
+`getWorkspace.security.inputGuard` 会报告 `native` 或 `fallback`。没有 Chromium 输入补丁时使用受管页面捕获层。Dev 构建默认启用保护，只有明确设置 `OPEN_BROWSER_INPUT_GUARD=off` 才关闭。
+
 ## 选择入口
 
 | 场景 | 调用顺序 |

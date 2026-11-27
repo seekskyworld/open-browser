@@ -59,13 +59,15 @@ const statusQueries = new Set(['getWorkspace', 'visualStatus', 'listDownloads', 
 
 export class BrowserService {
   constructor(browser, { concurrency = 4, lowMemoryMiB = Number(process.env.OPEN_BROWSER_LOW_MEMORY_MIB || 0), idleTimeoutMs = 30 * 60_000, sharedContext, groupTab, onActivity, onActionTarget,
-    journalPath, releaseTab, setInputGuard, readOnlyObserver = readDocumentSummary } = {}) {
+    journalPath, releaseTab, setInputGuard, withAgentInput, inputGuardMode, readOnlyObserver = readDocumentSummary } = {}) {
     if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16) fail('invalid_concurrency');
     if (!Number.isSafeInteger(idleTimeoutMs) || idleTimeoutMs <= 0) fail('invalid_idle_timeout');
     this.browser = browser;
     this.sharedContext = sharedContext;
     this.groupTab = groupTab;
     this.releaseTab = releaseTab;
+    this.withAgentInput = withAgentInput;
+    this.inputGuardMode = inputGuardMode;
     if (setInputGuard) this.setInputGuard = (ws, tab, enabled) => setInputGuard(tab, enabled, () => {
       ws.guardLost = true;
       if (ws.mode === 'agent' && !ws.finishing && !this.stopped)
@@ -404,7 +406,7 @@ export class BrowserService {
       ? { context: this.sharedContext } : await this.allocateContext();
     try {
       const ws = { id: randomUUID(), owner, name, agentName: displayName, context, browserContextId, origins, networkMode, mode: 'agent',
-        resourceOrigins: resources, blockedOrigins: new Map(), generation: randomUUID(), control: new AbortController(), pages: new Map(), operations: new Map(), credentials: new Map(),
+        resourceOrigins: resources, blockedOrigins: new Map(), inputGuardMode: this.inputGuardMode || (this.sharedContext ? 'unavailable' : 'not_required'), generation: randomUUID(), control: new AbortController(), pages: new Map(), operations: new Map(), credentials: new Map(),
         tail: Promise.resolve(), lanes: new Map(), pending: 0, handoff: null, lastActiveAt: Date.now(),
         inputTail: Promise.resolve(), inputPending: 0,
         popupTasks: new Set(), jobs: new Set(), recent: null, credentialRequests: new Map() };
@@ -736,10 +738,12 @@ export class BrowserService {
         });
         return lease.opening.then(()=>{},()=>{});
       });
-      if (ws.mode === 'agent') await this.setInputGuard?.(ws, tab, true);
       if (job) job.pageId = tab.id;
       this.notify(ws);
       if (this.sharedContext) await this.syncTab(ws, tab);
+      // Register the tab with the extension before attaching the fallback
+      // capture layer so its debugger state is established first.
+      if (ws.mode === 'agent') await this.setInputGuard?.(ws, tab, true);
       let firstRequest;
       if (popup) {
         // Recheck in the actual request handler as well as before goto. A handoff

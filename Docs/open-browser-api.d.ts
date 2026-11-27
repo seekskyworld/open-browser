@@ -13,6 +13,7 @@ export interface WorkspaceInfo {
   agentName: string;
   mode: 'agent' | 'transferring' | 'human';
   controlGeneration: string;
+  security:{inputGuard:'native'|'fallback'|'off'|'unavailable'|'not_required'};
   scope:'workspace'|'single_tab';
   pageAvailability:'managed'|'closed'|'unregistered'|'sync_pending';
   nextAction:'wait_for_sync'|'reattachPage'|'request_tab_selection'|'wait_for_agent_control';

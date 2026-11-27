@@ -7,6 +7,12 @@ description: 用户要求用 open-browser 浏览、观察页面、操作工作�
 
 运行 `open-browser skill` 可以输出当前安装包对应平台的完整指南，不会启动服务。需要 URL 形式 MCP 配置时使用 `open-browser-mcp-http`，它只监听回环地址并要求 profile token 的 Bearer 认证。
 
+## Agent 控制时的输入保护
+
+工作区进入 `agent` 状态后，受管页面的内容区域会强制锁定人工鼠标、触控板和键盘输入。Agent 的每个写入动作在服务端打开一次短暂的派发窗口，动作结束后立即重新锁定。地址栏、标签栏和工作区控制条仍可使用。页面底部的 **人工接管** 是唯一的人工输入入口，接管完成后页面会显示 **交回 Agent**。
+
+`getWorkspace` 的 `security.inputGuard` 会报告 `native` 或 `fallback`。`native` 使用带有 open-browser 输入补丁的 Chromium，`fallback` 使用受管页面的捕获层并保持相同的接管状态机。没有该补丁的 Dev 构建可启用 `fallback`。只有明确设置 `OPEN_BROWSER_INPUT_GUARD=off` 才会关闭保护，适合诊断场景。Agent 操作期间不要继续使用旧的人工输入结果，交回后先重新 `observe`。
+
 ## 选择入口
 
 | 场景 | 调用顺序 |

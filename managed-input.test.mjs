@@ -12,7 +12,7 @@ test('only the live managed page session can report a blocked physical press', a
       const session = new EventEmitter();
       session.send = async (method, args) => {
         assert.equal(method, 'Input.setOpenBrowserInputGuard');
-        assert.deepEqual(args, {enabled: true});
+        assert.equal(typeof args.enabled, 'boolean');
       };
       session.detach = async () => { session.detached = true; };
       sessions.push(session);
@@ -58,6 +58,34 @@ test('an unavailable guard rejects the operation and the ordinary page still acc
   await assert.rejects(setGuard({page}, true), {code:'input_guard_unavailable'});
   await page.getByRole('button').click();
   assert.equal(await page.getByRole('button').textContent(), '1');
+});
+
+test('the stock Chromium fallback blocks physical input and opens one Agent dispatch window', async t => {
+  const browser = await launchBrowser();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.setContent('<button onclick="this.textContent=String(Number(this.textContent)+1)">0</button>');
+  const setGuard = managedInput(page.context(), () => {}, {allowFallback: true});
+
+  await setGuard({page}, true);
+  if (setGuard.mode({page}) !== 'fallback') {
+    await setGuard({page}, false);
+    t.skip('the selected Chromium already provides the native input guard');
+    return;
+  }
+
+  await page.mouse.click(20, 20);
+  assert.equal(await page.getByRole('button').textContent(), '0');
+  await setGuard.withAgentInput({page}, () => page.getByRole('button').click());
+  assert.equal(await page.getByRole('button').textContent(), '1');
+  await page.goto('data:text/html,<button onclick="this.textContent=String(Number(this.textContent)+1)">0</button>');
+  await page.mouse.click(20, 20);
+  assert.equal(await page.getByRole('button').textContent(), '0');
+  await setGuard.withAgentInput({page}, () => page.getByRole('button').click());
+  assert.equal(await page.getByRole('button').textContent(), '1');
+  await setGuard({page}, false);
+  await page.mouse.click(20, 20);
+  assert.equal(await page.getByRole('button').textContent(), '2');
 });
 
 test('a failed multi-tab guard rolls back before the agent can act; handoff waits for unlock', async () => {

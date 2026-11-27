@@ -38,7 +38,7 @@ export class UploadGrants {
   }
 }
 
-export async function chooseGrantedFile(ws,tab,el,id,beforeDispatch,check) {
+export async function chooseGrantedFile(ws,tab,el,id,beforeDispatch,dispatch,check) {
   ws.uploads.get(ws,tab,id);
   // Register the chooser before dispatch. Many pages create a detached input during click.
   let receive, timer;
@@ -49,13 +49,13 @@ export async function chooseGrantedFile(ws,tab,el,id,beforeDispatch,check) {
   });
   try {
     beforeDispatch();
-    const [chooser]=await Promise.all([chosen,el.click({timeout:5000})]);
+    const [chooser]=await Promise.all([chosen,dispatch(() => el.click({timeout:5000}))]);
     const frame=await chooser.element().ownerFrame();
     if (frame!==tab.page.mainFrame()) fail('file_origin_mismatch');
-    check();
+    (check || (() => {}))();
     const {payload}=ws.uploads.get(ws,tab,id);
     ws.uploads.remove(id);
-    await chooser.setFiles(payload,{timeout:5000});
+    await dispatch(() => chooser.setFiles(payload,{timeout:5000}));
   } finally {
     clearTimeout(timer);
     tab.page.off('filechooser',receive);

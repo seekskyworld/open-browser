@@ -43,6 +43,10 @@ async function fillOutcome(handle, expected, credential) {
   return actual ? 'transformed' : 'unchanged';
 }
 
+async function agentDispatch(service, tab, work) {
+  return service.withAgentInput ? service.withAgentInput(tab, work) : work();
+}
+
 function beforeDispatch(service, ws, tab, op, documentId, generation) {
   if (op.cancel) fail('operation_cancelled');
   ensureBudget(op);
@@ -203,8 +207,8 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
     }
     if (action.kind === 'spatial') {
       try {
-        await service.visual.input(ws,tab,service.actors.getStore(),{...action,documentId,controlGeneration},'agent',
-          () => beforeDispatch(service, ws,tab,op,documentId,controlGeneration));
+        await agentDispatch(service, tab, () => service.visual.input(ws,tab,service.actors.getStore(),{...action,documentId,controlGeneration},'agent',
+          () => beforeDispatch(service, ws,tab,op,documentId,controlGeneration)));
       } catch (error) {
         if (!op.dispatched) fail(error.code || 'visual_action_failed');
         tab.needsSubmissionReview=true;
@@ -252,6 +256,7 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
         await service.checkSemanticTarget(ws,tab,action.ref,frameEntry,el,'click');
         await chooseGrantedFile(ws,tab,el,action.fileId,
           ()=>beforeDispatch(service, ws,tab,op,documentId,controlGeneration),
+          work => agentDispatch(service, tab, work),
           ()=>{ service.requireControl(ws,controlGeneration); if (op.cancel) fail('operation_cancelled'); });
       } else if (action.kind === 'setChecked') {
         const state = await el.evaluate(readCheckState);
@@ -263,7 +268,7 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
           await service.checkSemanticTarget(ws,tab,action.ref,frameEntry,el,action.kind);
           if (await el.evaluate(readCheckState) !== action.checked) {
             beforeDispatch(service, ws,tab,op,documentId,controlGeneration);
-            await el.click({timeout:5000});
+            await agentDispatch(service, tab, () => el.click({timeout:5000}));
             if (await el.evaluate(readCheckState) !== action.checked) fail('state_mismatch');
           }
         }
@@ -301,7 +306,7 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
             interrupt = () => { if (tab.dialog) reject(new ServiceError('operation_cancelled')); };
             op.controller.signal.addEventListener('abort',interrupt,{once:true});
           });
-          try { await Promise.race([el.click({timeout:5000,noWaitAfter:!!navigationStart}), suspended]); }
+          try { await agentDispatch(service, tab, () => Promise.race([el.click({timeout:5000,noWaitAfter:!!navigationStart}), suspended])); }
           finally { op.controller.signal.removeEventListener('abort',interrupt); }
           if (lease.opening) await lease.opening;
         }
@@ -312,22 +317,22 @@ export async function perform(service, ws, tab, { documentId, controlGeneration,
         if (action.kind === 'doubleClick') clickProbe = await armClickProbe(el, 2);
         beforeDispatch(service, ws, tab, op, documentId, controlGeneration);
         if (action.kind === 'doubleClick') {
-          await el.dblclick({timeout:5000});
+          await agentDispatch(service, tab, () => el.dblclick({timeout:5000}));
         }
-        else if (action.kind === 'hover') await el.hover({timeout:5000});
-        else if (action.kind === 'press') await el.press(action.key, {timeout:5000});
+        else if (action.kind === 'hover') await agentDispatch(service, tab, () => el.hover({timeout:5000}));
+        else if (action.kind === 'press') await agentDispatch(service, tab, () => el.press(action.key, {timeout:5000}));
         else if (action.kind === 'scroll') {
           await el.scrollIntoViewIfNeeded({timeout:5000});
-          await tab.page.mouse.wheel(action.deltaX ?? 0, action.deltaY);
-        } else await el.dragTo(destination, {timeout:5000});
+          await agentDispatch(service, tab, () => tab.page.mouse.wheel(action.deltaX ?? 0, action.deltaY));
+        } else await agentDispatch(service, tab, () => el.dragTo(destination, {timeout:5000}));
       } else {
         service.notifyTarget(ws, tab, el, documentId, controlGeneration, origin, action.kind);
         await waitActionable(service, ws, tab, op, el, action.kind, documentId, controlGeneration);
         await service.checkSemanticTarget(ws,tab,action.ref,frameEntry,el,action.kind);
         beforeDispatch(service, ws, tab, op, documentId, controlGeneration);
-        if (action.kind === 'select') await el.selectOption({ value }, {timeout:5000});
+        if (action.kind === 'select') await agentDispatch(service, tab, () => el.selectOption({ value }, {timeout:5000}));
         else {
-          await el.fill(value, {timeout:5000});
+          await agentDispatch(service, tab, () => el.fill(value, {timeout:5000}));
           receipt.fillOutcome = await fillOutcome(el, value, action.kind === 'fillCredential');
         }
       }

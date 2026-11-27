@@ -187,7 +187,7 @@ export async function startApplication({ headless = false, mode = 'service', onS
     } else {
       browser = await launchServiceBrowser({ headless: mode === 'native' || headless });
     }
-    engine = new BrowserService(browser, { concurrency: 4, sharedContext, readOnlyObserver, journalPath: path.join(stateDir, 'open-browser-receipts.sqlite'), releaseTab: shell?.releaseTab, setInputGuard: shell?.setInputGuard, groupTab: shell?.groupTab, onActivity: shell?.onActivity,
+    engine = new BrowserService(browser, { concurrency: 4, sharedContext, readOnlyObserver, journalPath: path.join(stateDir, 'open-browser-receipts.sqlite'), releaseTab: shell?.releaseTab, setInputGuard: shell?.setInputGuard, withAgentInput: shell?.withAgentInput, inputGuardMode: shell?.inputGuardMode, groupTab: shell?.groupTab, onActivity: shell?.onActivity,
       onActionTarget: shell?.onActionTarget });
     const call = async (method, params = {}) => {
       if (method === 'createWorkspace') return registry.call(engine, 'local', method, params);
