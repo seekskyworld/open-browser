@@ -13,6 +13,7 @@ open-browser is an open-source desktop browser for agents. It runs locally and s
 ## What you can do
 
 - **Run tasks in parallel.** Workspaces progress independently and actions on each page stay in order. The service keeps same-page actions ordered while independent workspaces run concurrently. Use `npm run test:unit` and `npm run test:contract` to reproduce the local regression suites.
+- **Use an existing signed-in tab.** Ask the agent to create a named workspace. Open the extension on the desired open-browser tab, choose that task, and pass the two-minute authorization to the agent. The tab stays open when the task finishes.
 - **Share a live task with an agent.** Take over during sign-in, complete the form in place and hand the same tab back with its session intact. For routine sign-ins, bind a credential to the workspace and site so the agent can fill it by reference. [Workspace and handoff guide](Docs/控制台分组与接管方案.md)
 - **Pause safely for site verification.** When a site returns a recognized security challenge, the workspace stops Agent actions and shows **需要人工验证**. Take over the visible page, complete the site's own verification, then return control and observe again. open-browser does not hide automation signals or bypass the challenge.
 - **See the work without another dashboard window.** Every new tab opens the local Agent console with active workspaces, agent names, current status and recent operation records. The native task bar keeps only takeover and a one-click **End** action.

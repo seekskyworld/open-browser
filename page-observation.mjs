@@ -74,6 +74,36 @@ export function inspectDocument(options = {}) {
     foreground={role:front.getAttribute('role') || 'dialog',name:(label || front.getAttribute('aria-label') || '').slice(0,160),
       bounds:{x,y,width,height}};
   }
+  if (options.canvas) {
+    const root = front || document;
+    let truncated = false;
+    const rows = (selector, describe) => {
+      const result = [];
+      for (const el of root.querySelectorAll(selector)) {
+        if (!visible(el) || composedMatch(el, 'input,textarea,select,[contenteditable]')) continue;
+        if (result.length >= 100) { truncated = true; break; }
+        result.push(describe(el));
+      }
+      return result;
+    };
+    const label = el => visibleText(el, 512) || (el.getAttribute('aria-label') || '').slice(0, 512);
+    const nodeRows = rows('.react-flow__node', el => ({
+      id:(el.getAttribute('data-id') || '').slice(0,128), label:label(el), selected:el.classList.contains('selected')
+    }));
+    const edges = rows('.react-flow__edge', el => {
+      const accessibleLabel = (el.getAttribute('aria-label') || '').slice(0,512);
+      const endpoints = /^Edge from (\S+) to (\S+)$/.exec(accessibleLabel);
+      return {id:(el.getAttribute('data-id') || '').slice(0,128), label:accessibleLabel || label(el),
+        selected:el.classList.contains('selected'), ...(endpoints && {source:endpoints[1],target:endpoints[2]})};
+    });
+    const messages = rows('[data-message-author-role], [role="log"] > [role="article"]', el => ({
+      role:['user','assistant','system','tool'].includes(el.dataset.messageAuthorRole) ? el.dataset.messageAuthorRole : 'message',
+      text:label(el)
+    }));
+    const attachments = rows('a[download]', el => ({label:label(el)}));
+    return {adapter:root.querySelector('.react-flow') ? 'react-flow' : messages.length ? 'chat' : 'unsupported',
+      nodes:nodeRows, edges, messages, attachments, truncated};
+  }
   const nodes=[],details=[];
   function stateOf(el) {
     const state = {};

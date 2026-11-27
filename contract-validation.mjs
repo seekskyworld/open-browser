@@ -7,7 +7,7 @@ const schemas = new Map(tools.map(tool => [tool.name,tool.inputSchema]));
 // Older callers spread a returned page or workspace handle into a subsequent request.
 // Strip only the known read-only handle fields before checking that request.
 const viewFields = new Set(['agentName','name','mode','pages','controlGeneration','activity','blockedOrigins','pageId','origin','title','profile','profileId','profileAlias',
-  'openedByOperationId','openerPageId','documentId','pendingDialogs']);
+  'pageAvailability','nextAction','scope','accountAlias','ownership','syncState','syncRevision','lastSyncedAt','openedByOperationId','openerPageId','documentId','pendingDialogs']);
 
 export function checkAgentRequest(method, params) {
   const schema = schemas.get(method);

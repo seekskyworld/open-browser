@@ -20,7 +20,8 @@ REVISION = '98a2592026af8d673b9fa83b626ac68bdf4ae78a'
 FRAMEWORK = 'Google Chrome for Testing Framework'
 SOURCE = b'Chromium Safe Storage'
 DEV = os.environ.get('OPEN_BROWSER_BUILD_PROFILE', '').strip().lower() == 'dev'
-PRODUCT = b'open-browser Dev Safe' if DEV else b'open-browser Keychain'
+STABLE_PRODUCT = b'open-browser Keychain'
+PRODUCT = b'open-browser Dev Safe' if DEV else STABLE_PRODUCT
 EXPECTED_BUNDLE = 'local.open-browser-dev.chromium' if DEV else 'local.open-browser.chromium'
 # Mach CPU type -> offset in __TEXT,__const, input hash, branded hash.
 RELEASE = {
@@ -49,6 +50,18 @@ def in_readonly_constants(data, offset):
     return False
 
 
+def matches_branded_digest(data, offset, stable_digest):
+    # Dev differs from the pinned Stable output at exactly this constant.
+    end = offset + len(PRODUCT)
+    if data[offset:end] != PRODUCT:
+        return False
+    view = memoryview(data)
+    digest = hashlib.sha256(view[:offset])
+    digest.update(STABLE_PRODUCT)
+    digest.update(view[end:])
+    return digest.hexdigest() == stable_digest
+
+
 def brand(bundle):
     bundle = bundle.resolve(strict=True)
     with (bundle / 'Contents/Info.plist').open('rb') as stream:
@@ -67,7 +80,7 @@ def brand(bundle):
             raise ValueError('Unrecognized framework architecture')
         offset, before, after = RELEASE[cpu]
         digest = hashlib.sha256(data).hexdigest()
-        if digest == after:
+        if matches_branded_digest(data, offset, after):
             return
         if digest != before:
             raise ValueError('Framework SHA-256 differs from the reviewed official release')
@@ -76,7 +89,7 @@ def brand(bundle):
                 or data.find(SOURCE) != offset or data.find(SOURCE, offset + 1) != -1):
             raise ValueError('Unexpected keychain service constant layout')
         data[offset:offset+len(SOURCE)] = PRODUCT
-        if hashlib.sha256(data).hexdigest() != after:
+        if not matches_branded_digest(data, offset, after):
             raise ValueError('Unexpected branded framework digest')
         # Publish a fully verified copy atomically, even for hardlinked input.
         with NamedTemporaryFile(dir=binary.parent, prefix='.open-browser-keychain-', delete=False) as temp:

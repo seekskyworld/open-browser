@@ -9,6 +9,16 @@ export function finishDigest(keepPageIds) {
   return createHash('sha256').update(JSON.stringify(['finish', [...keepPageIds].sort()])).digest('hex');
 }
 
+export function previewFinish(service, ws, keepPageIds) {
+  const digest = finishDigest(keepPageIds);
+  for (const id of keepPageIds) service.tab(ws, id);
+  const keptPageIds = [], closedPageIds = [];
+  for (const tab of ws.pages.values())
+    (keepPageIds.includes(tab.id) || !tab.createdByAgent ? keptPageIds : closedPageIds).push(tab.id);
+  const previewId = createHash('sha256').update(JSON.stringify([ws.id, ws.generation, digest, keptPageIds, closedPageIds])).digest('hex');
+  return {previewId, keptPageIds, closedPageIds};
+}
+
 function stopOperations(ws, controlTransferred = false) {
   ws.uploads?.clear();
   ws.control.abort();
@@ -19,7 +29,7 @@ function stopOperations(ws, controlTransferred = false) {
   }
 }
 
-export async function finish(service, ws, {operationId, keepPageIds, controlGeneration}, trusted = false) {
+export async function finish(service, ws, {operationId, keepPageIds, controlGeneration, previewId}, trusted = false) {
   stringParam(operationId, 160);
   const digest = finishDigest(keepPageIds);
   const past = service.store.get(ws.owner, ws.id, operationId);
@@ -29,8 +39,11 @@ export async function finish(service, ws, {operationId, keepPageIds, controlGene
   }
   if (controlGeneration !== undefined && controlGeneration !== ws.generation) fail('stale_control');
   if (ws.finishing) fail('workspace_finishing');
+  if (previewId !== undefined && (ws.pending || ws.inputPending || ws.popupTasks.size ||
+      previewFinish(service, ws, keepPageIds).previewId !== previewId)) fail('finish_preview_changed');
   if (!trusted || ws.mode !== 'human') service.requireControl(ws, ws.generation);
   for (const id of keepPageIds) service.tab(ws, id);
+  ws.offer?.revoke();
   const keep = new Set(keepPageIds);
   const receipt = { operationId, state:'running', phase:'running', totalSteps:ws.pages.size, completedSteps:0, keptPageIds:[], closedPageIds:[] };
   service.store.save(ws.owner, ws.id, digest, receipt);
@@ -150,7 +163,7 @@ async function setWorkspaceGuard(service, ws, enabled) {
 async function refreshControlGroups(service, ws) {
   if (!service.groupTab) return;
   await Promise.allSettled([...ws.pages.values()].filter(tab => !tab.dialog && !tab.page.isClosed())
-    .map(async tab => service.groupTab(tab.page, ws.id, ws.name, ws.mode, ws.agentName, tab.id)));
+    .map(async tab => service.syncTab(ws, tab)));
 }
 
 export async function returnToAgent(service, ws, expectedGeneration) {
@@ -197,6 +210,7 @@ export async function returnToAgent(service, ws, expectedGeneration) {
 }
 
 export async function close(service, ws) {
+  ws.offer?.revoke();
   for (const tab of ws.pages.values()) discardDialog(tab);
   ws.mode = 'closed';
   service.store.event(ws.owner, ws.id, 'control', ws.mode);
@@ -206,7 +220,15 @@ export async function close(service, ws) {
   await ws.downloads?.close();
   if (service.sharedContext) {
     await Promise.allSettled([ws.tail, ws.inputTail,...ws.popupTasks]);
-    await Promise.all([...ws.pages.values()].map(async ({page,id}) => {
+    await Promise.all([...ws.pages.values()].map(async tab => {
+      const {page, id} = tab;
+      if (ws.singleTab) {
+        await releaseInput(tab);
+        await service.setInputGuard?.(ws, tab, false);
+        try { await service.releaseTab?.(page, ws.id, id); }
+        finally { tab.unregister(); }
+        return;
+      }
       if (!page.isClosed() && service.releaseTab) await service.releaseTab(page,ws.id,id).catch(() => {});
       await page.close().catch(() => {});
     }));

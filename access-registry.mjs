@@ -45,6 +45,9 @@ export class AccessRegistry {
   owner(task) {
     return typeof task === 'string' && this.db.prepare('SELECT owner FROM tasks WHERE id=?').get(task)?.owner;
   }
+  hasDelegates(task) {
+    return !!this.db.prepare('SELECT 1 FROM grants WHERE task=? LIMIT 1').get(task);
+  }
   permission(client, task) {
     if (client === this.owner(task)) return 'owner';
     return typeof task === 'string' && this.db.prepare('SELECT permission FROM grants WHERE client=? AND task=?').get(client,task)?.permission;
@@ -79,6 +82,7 @@ export class AccessRegistry {
       if (client === 'local' && !this.owner(task)) return engine.call(method,validateRequest(method,params),client);
       fail('workspace_not_found');
     }
+    if (method === 'adoptCurrentTab' && (permission !== 'owner' || this.hasDelegates(task))) fail('forbidden');
     if (permission === 'read' && !readMethods.has(method)) fail('forbidden');
     const scopedMethod = permission === 'read' && method === 'observe' ? 'observeReadOnly' : method;
     const result = await engine.call(scopedMethod,validateRequest(method,params),this.owner(task),client);
@@ -134,6 +138,7 @@ export class AccessRegistry {
     } else {
       const owner = this.owner(workspaceId);
       if (!owner || owner === principalId) fail('invalid_workspace');
+      if (method === 'grant' && engine.workspaces.get(workspaceId)?.singleTab) fail('single_tab_scope');
       const prev = this.permission(principalId,workspaceId);
       if (method === 'grant' && ['read','control'].includes(permission))
         this.db.prepare('INSERT OR REPLACE INTO grants VALUES(?,?,?)').run(principalId,workspaceId,permission);

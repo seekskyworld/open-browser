@@ -13,14 +13,18 @@ export interface WorkspaceInfo {
   agentName: string;
   mode: 'agent' | 'transferring' | 'human';
   controlGeneration: string;
-  pages: ReadonlyArray<PageHandle & { documentId:string; origin: string; title: string; openerPageId?:string; openedByOperationId?:string }>;
+  scope:'workspace'|'single_tab';
+  pageAvailability:'managed'|'closed'|'unregistered'|'sync_pending';
+  nextAction:'wait_for_sync'|'reattachPage'|'request_tab_selection'|'wait_for_agent_control';
+  accountAlias?:string;
+  pages: ReadonlyArray<PageHandle & { ownership:'user'|'agent'; syncState:'synced'|'not_required'|'sync_pending'; syncRevision:number; lastSyncedAt:number|null; documentId:string; origin: string; title: string; openerPageId?:string; openedByOperationId?:string }>;
   activity: WorkspaceActivity;
   blockedOrigins?: Array<{origin:string; scope:'resource'|'navigation'; reason:string; resourceType:string}>;
 }
 
 export interface WorkspaceOperation {
   pageId?: string;
-  kind: 'openPage' | 'observe' | 'act' | 'captureVisual';
+  kind: 'openPage' | 'observe' | 'act' | 'captureVisual' | 'adoptCurrentTab' | 'canvasSnapshot';
   state: OperationReceipt['state'];
   completedSteps: number;
   totalSteps: number;
@@ -199,6 +203,13 @@ export interface OpenBrowserV1 {
   listWorkspaces(): Promise<WorkspaceInfo[]>;
   getWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
   openPage(workspaceId: string, url: string): Promise<PageHandle>;
+  adoptCurrentTab(workspaceId:string, adoptionToken:string):Promise<PageHandle>;
+  reattachPage(page:PageHandle, options?:{waitMs?:number}):Promise<PageObservation>;
+  previewFinish(workspaceId:string, keepPageIds?:string[]):Promise<{previewId:string; keptPageIds:string[]; closedPageIds:string[]}>;
+  canvasSnapshot(page:PageHandle):Promise<PageHandle & {documentId:string; controlGeneration:string; snapshotVersion:string;
+    adapter:'react-flow'|'chat'|'unsupported'; nodes:Array<{id:string; label:string; selected:boolean}>;
+    edges:Array<{id:string; label:string; selected:boolean; source?:string; target?:string}>; messages:Array<{role:string; text:string}>;
+    attachments:Array<{label:string}>; truncated:boolean}>;
   observe(page: PageHandle & ObserveOptions): Promise<PageObservation>;
   /** SDK convenience. Observes and queues an action batch through one service request. */
   observeAndAct(page: PageHandle & ObserveOptions, request: {actions: readonly PageAction[];operationId?:string;observeAfter?:'full'|'delta';timeoutMs?:number}): Promise<{observation:PageObservation;receipt:OperationReceipt}>;
@@ -216,7 +227,7 @@ export interface OpenBrowserV1 {
   actAfterObserve(page: PageHandle, request: {actions: readonly PageAction[];operationId?:string;observeAfter?:'full'|'delta';timeoutMs?:number}): Promise<{observation:PageObservation;receipt:OperationReceipt}>;
   diagnoseOperation(workspaceId:string,operationId:string):Promise<{version:1;state:string;phase?:OperationReceipt['phase'];totalSteps?:number;completedSteps:number;dispatchRecorded:boolean;category:string;nextAction:string}>;
   getOperation(workspaceId: string, operationId: string): Promise<OperationReceipt>;
-  finishWorkspace(workspaceId:string, keepPageIds:string[], operationId:string): Promise<OperationReceipt>;
+  finishWorkspace(workspaceId:string, keepPageIds:string[], operationId:string, previewId?:string): Promise<OperationReceipt>;
   /** SDK convenience. Generates a fresh idempotency key for finishing a workspace. */
   finish(workspaceId:string, keepPageIds?:string[]): Promise<OperationReceipt>;
   respondDialog(page:PageHandle, response:{controlGeneration:string;dialogId:string;accept:boolean;text?:string}):Promise<{dialogId:string;accepted:boolean}>;
@@ -226,7 +237,7 @@ export interface OpenBrowserV1 {
   readOutput(workspaceId:string, outputId:string, options?:{partName?:string;offset?:number;limit?:number}): Promise<OutputChunk>;
   cancelDownload(workspaceId:string,downloadId:string): Promise<WorkspaceDownload>;
   getRecoverySummary(workspaceId:string, options?:{after?:number;objectsAfter?:number;limit?:number}): Promise<{
-    workspaceId:string; mode:WorkspaceInfo['mode']|'unavailable'; pages:Array<{pageId:string;next:'observe'|'handle_unavailable'}>;
+    workspaceId:string; mode:WorkspaceInfo['mode']|'unavailable'; pages:Array<{pageId:string;next:'observe'|'handle_unavailable'; lastDisposition?:'released'|'closed'; pageAvailability:'managed'|'unregistered'|'closed'; nextAction:string}>;
     deliveries:Array<{downloadId:string}>; outputs:Array<{outputId:string}>; operations:Array<OperationReceipt & {next:'verify_site'|'poll'|'already_completed'|'inspect_receipt'}>;
     nextCursor:number|null; nextObjectCursor:number|null;
   }>;

@@ -45,6 +45,24 @@ function showCredential(next) {
   el('save').textContent = '绑定凭据';
 }
 
+let popupTabId, ordinaryTarget, tokenTimer, standalone = false;
+function clearToken() {
+  clearTimeout(tokenTimer);
+  el('adopt-token').value = '';
+  el('adopt-result').hidden = true;
+}
+el('adopt-task').onchange = () => { clearToken(); el('adopt').disabled = !el('adopt-task').value; };
+el('adopt').onclick = () => perform(async () => {
+  clearToken();
+  const {id:targetId, origin} = ordinaryTarget;
+  const reply = await call('offerCurrentTab',{workspaceId:el('adopt-task').value, tabId:popupTabId,
+    targetId, origin, accountAlias:el('adopt-alias').value.trim()});
+  el('adopt-token').value = JSON.stringify({workspaceId:reply.workspaceId,adoptionToken:reply.adoptionToken});
+  el('adopt-result').hidden = false;
+  el('adopt-token').select();
+  tokenTimer = setTimeout(clearToken, Math.max(0, reply.expiresAt - Date.now()));
+});
+
 let deliveryKey = '', finishId;
 function renderDelivery(w) {
   const originLabels = {resource:'加载静态资源',navigation:'允许导航与页面操作'};
@@ -67,6 +85,7 @@ function renderDelivery(w) {
     const label = document.createElement('label'), input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = true;
+    input.disabled = p.ownership === 'user';
     input.value = p.pageId;
     input.onchange = () => { finishId = crypto.randomUUID(); };
     label.append(input, ' ' + (p.title || p.origin || '页面'));
@@ -119,9 +138,21 @@ function render(w) {
   renderDialogs(w);
   renderDelivery(w);
   const pages = w.pages || [];
-  if (!pages.some(p => p.pageId === selectedTab)) selectedTab = pages.at(-1)?.pageId || '';
+  if (standalone && !selectedTab) selectedTab = pages[0]?.pageId || '';
+  const page = pages.find(p => p.pageId === selectedTab);
   options(el('pages'), pages.map((p, i) => [p.pageId, (i+1) + ' · ' + (p.title || p.origin || '页面')]), selectedTab);
-  el('control').textContent = w.unlockPending ? '重试人工接管' : w.mode === 'human' ? '交回 Agent' : '接管此页';
+  if (!page) {
+    el('workspace').hidden = !standalone;
+    el('control').disabled = true;
+    el('uploads').hidden = true;
+    el('page-details').textContent = '';
+    el('status').textContent = '原标签页已关闭或解绑';
+    showCredential(null);
+    return;
+  }
+  const sync = page.lastSyncedAt ? '上次同步 ' + new Date(page.lastSyncedAt).toLocaleTimeString() : '';
+  el('page-details').textContent = [page.origin, w.accountAlias, page.syncState === 'sync_pending' ? '同步中' : sync].filter(Boolean).join(' · ');
+  el('control').textContent = w.unlockPending ? '重试人工接管' : w.mode === 'human' ? '交回 Agent' : w.scope === 'single_tab' ? '接管此页' : '接管工作区';
   el('control').disabled = busy || (w.mode === 'transferring' && !w.unlockPending) || (!selectedTab && w.mode !== 'human');
   el('uploads').hidden = w.mode!=='agent' || !selectedTab;
   el('upload-origin').textContent = pages.find(p=>p.pageId===selectedTab)?.origin || '';
@@ -133,9 +164,42 @@ async function sync() {
   refreshing = true;
   const serial = revision;
   try {
+    if (Number.isInteger(popupTabId)) {
+      const key = 'tab:' + popupTabId;
+      const mapping = (await chrome.storage.session.get(key))[key];
+      if (!contextTab && mapping) {
+        contextTab = true;
+        selected = mapping.workspaceId;
+        selectedTab = mapping.pageId;
+        clearToken();
+      }
+    }
+    el('adoption').hidden = true;
+    if (!contextTab && !standalone) {
+      const list = await call('listWorkspaces');
+      const target = (await chrome.debugger.getTargets()).find(t => t.type === 'page' && t.tabId === popupTabId);
+      const origin = URL.parse(target?.url);
+      if (serial !== revision) return;
+      render(null);
+      if (!origin || !['http:', 'https:'].includes(origin.protocol)) return;
+      if (ordinaryTarget?.id !== target.id || ordinaryTarget?.origin !== origin.origin) clearToken();
+      ordinaryTarget = {id:target.id, origin:origin.origin};
+      const tasks = list.filter(w => w.pageAvailability === 'unregistered' && w.mode === 'agent');
+      el('adoption').hidden = false;
+      el('empty').hidden = true;
+      el('status').textContent = '普通标签页';
+      el('adopt-site').textContent = origin.origin + (tasks.length ? '' : ' · 请让 Agent 先创建一个命名工作区');
+      const chooser = el('adopt-task');
+      options(chooser, tasks.map(w => [w.workspaceId, workspaceTitle(w) + ' · ' + w.workspaceId.slice(0,8)]),
+        tasks.some(w => w.workspaceId === chooser.value) ? chooser.value : tasks.length === 1 ? tasks[0].workspaceId : '');
+      el('adopt').disabled = !chooser.value;
+      return;
+    }
     const list = contextTab ? (selected ? [await call('getWorkspace', {workspaceId: selected })] : []) : await call('listWorkspaces');
     if (serial !== revision) return;
+    if (contextTab && !list.some(w => w.workspaceId === selected)) { render(null); return; }
     if (!list.some(w => w.workspaceId === selected)) {
+      selectedTab = '';
       selected = (list.find(w => w.activity?.needsCredential) || list[0])?.workspaceId || '';
     }
     const titles = list.map(workspaceTitle);
@@ -168,7 +232,16 @@ async function sync() {
         capture.clip.x+', '+capture.clip.y+') '+capture.clip.width+' × '+capture.clip.height;
     }
   } catch (error) {
-    if (serial === revision) { render(null); el('status').textContent = '连接失败'; notify(error.message); }
+    if (serial === revision) {
+      render(null);
+      if (contextTab && error.message === 'workspace_not_found') {
+        el('status').textContent = '原任务已结束或服务已重启';
+        notify('请在需要授权的标签页重新打开扩展。');
+      } else {
+        el('status').textContent = '连接失败';
+        notify(error.message);
+      }
+    }
   } finally {
     refreshing = false;
     if (!busy && serial !== revision) void sync();
@@ -234,11 +307,12 @@ async function perform(action) {
   busy = true;
   revision++;
   notify();
-  for (const element of document.querySelectorAll('button, select, input')) element.disabled = true;
+  const enabled = [...document.querySelectorAll('button:enabled, select:enabled, input:enabled')];
+  for (const element of enabled) element.disabled = true;
   try { await action(); } catch (error) { notify(error.message); }
   finally {
     busy = false;
-    for (const element of document.querySelectorAll('button, select, input')) element.disabled = false;
+    for (const element of enabled) element.disabled = false;
     render(detail);
     void sync();
   }
@@ -287,7 +361,8 @@ el('upload-file').onchange = event => {
   });
 };
 el('control').onclick = () => perform(async () => {
-  if (detail.mode === 'human') await call('returnToAgent', { workspaceId: selected, controlGeneration: detail.controlGeneration });
+  if (!detail?.pages.some(p => p.pageId === selectedTab)) return;
+  if (detail.mode === 'human') await call('returnToAgent', { workspaceId: selected, pageId:selectedTab, controlGeneration: detail.controlGeneration });
   else await call('takeControl', { workspaceId: selected, pageId: selectedTab, controlGeneration: detail.controlGeneration });
 });
 el('credential').onsubmit = event => {
@@ -308,7 +383,8 @@ el('credential').onsubmit = event => {
 
 async function open() {
   const explicit = /^#tab-(\d+)(-delivery)?$/.exec(location.hash);
-  const tabId = explicit ? Number(explicit[1]) : (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.id;
+  standalone = !explicit && !!(await chrome.tabs.getCurrent());
+  const tabId = popupTabId = standalone ? undefined : explicit ? Number(explicit[1]) : (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0]?.id;
   if (Number.isInteger(tabId)) {
     const key = 'tab:' + tabId;
     const owned = (await chrome.storage.session.get(key))[key];

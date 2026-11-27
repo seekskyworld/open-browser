@@ -14,11 +14,19 @@
 <header><strong><img src="icons/open-browser-48.png" width="24" height="24" alt="">open-browser</strong><span id="status" role="status">正在连接…</span></header>
 <main>
 <p id="empty" hidden>当前没有活动任务。新标签页会显示 Agent 控制台。</p>
+<section id="adoption" hidden>
+<p id="adopt-site"></p>
+<label for="adopt-task">授权给哪个 Agent 任务</label><select id="adopt-task"></select>
+<label for="adopt-alias">账号别名（选填）</label><input id="adopt-alias" maxlength="48" placeholder="例如：工作账号">
+<div class="action"><button id="adopt" type="button">让 Agent 操作此页</button></div>
+<label id="adopt-result" hidden>将以下授权交给所选 Agent，两分钟内有效<input id="adopt-token" readonly></label>
+</section>
 <section id="workspace" hidden>
 <div id="context-selection" hidden>
 <label for="workspaces">工作区</label><select id="workspaces"></select>
 <label for="pages">标签页</label><select id="pages"></select>
 </div>
+<p id="page-details"></p>
 <div class="action"><button id="control" type="button"></button></div>
 <div id="dialogs"></div>
 <div id="blocked"></div>

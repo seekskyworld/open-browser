@@ -1,7 +1,7 @@
 'use strict';
 
 importScripts('workspace-title.js', 'tab-action.js');
-globalThis.openBrowserGroupVersion = 11;
+globalThis.openBrowserGroupVersion = 12;
 
 const groupsInProgress = new Map();
 
@@ -10,6 +10,11 @@ async function groupPage(state) {
   const target = (await chrome.debugger.getTargets()).find(t => t.type === 'page' && t.id === targetId);
   if (!Number.isInteger(target?.tabId)) throw new Error('target_not_found');
   const tab = await chrome.tabs.get(target.tabId);
+  if (state.preserveGroup) {
+    await registerAction(tab.id, state);
+    await chrome.storage.session.set({ ['page:' + workspaceId + ':' + state.pageId]: { tabId: tab.id } });
+    return { tabId:tab.id };
+  }
   const key = 'group:' + workspaceId + ':' + tab.windowId;
   const stored = (await chrome.storage.session.get(key))[key];
   const group = Number.isInteger(stored) ? await chrome.tabGroups.get(stored).catch(() => null) : null;
@@ -181,7 +186,7 @@ globalThis.openBrowserShow = async function () {
 };
 
 const newtabMethods = new Set(['listWorkspaces', 'listAgentHistory', 'listEvents']);
-const methods = new Set(['listUploads','grantUpload','revokeUpload','respondDialog','listDownloads','cancelDownload','keepDownload','visualStatus','listOperations','listEvents', 'listWorkspaces', 'getWorkspace', 'takeControl', 'returnToAgent', 'grantOrigin', 'resolveCredential', 'finishWorkspace']);
+const methods = new Set(['offerCurrentTab','listUploads','grantUpload','revokeUpload','respondDialog','listDownloads','cancelDownload','keepDownload','visualStatus','listOperations','listEvents', 'listWorkspaces', 'getWorkspace', 'takeControl', 'returnToAgent', 'grantOrigin', 'resolveCredential', 'finishWorkspace']);
 const pending = new Map();
 const queued = [];
 let waiting;
@@ -211,7 +216,17 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     respond({ error: 'invalid_request' });
     return false;
   }
-  hostRequest(message.method, message.params).then(result => respond({ result }), error => respond({ error: error.message }));
+  const dispatch = async () => {
+    if (message.method !== 'offerCurrentTab') return hostRequest(message.method, message.params);
+    const {tabId, targetId, origin, workspaceId, accountAlias} = message.params;
+    const [active] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
+    if (active?.id !== tabId || !Number.isInteger(tabId)) throw Error('adoption_page_changed');
+    const target = (await chrome.debugger.getTargets()).find(t => t.type === 'page' && t.tabId === tabId);
+    if (!target || target.id !== targetId || new URL(target.url).origin !== origin)
+      throw Error('adoption_page_changed');
+    return hostRequest('offerCurrentTab', {workspaceId, targetId, origin, accountAlias});
+  };
+  dispatch().then(result => respond({ result }), error => respond({ error: error.message }));
   return true;
 });
 

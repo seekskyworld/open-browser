@@ -36,6 +36,8 @@ export class ReceiptStore {
         operationId TEXT, completedSteps INTEGER, expires INTEGER, actorId TEXT, pixelWidth INTEGER, pixelHeight INTEGER);
       CREATE INDEX IF NOT EXISTS event_feed ON events(owner,workspace,sequence);
       CREATE INDEX IF NOT EXISTS event_expiry ON events(expires);`);
+    if (!this.db.prepare('PRAGMA table_info(recovery_objects)').all().some(field => field.name === 'disposition'))
+      this.db.exec('ALTER TABLE recovery_objects ADD COLUMN disposition TEXT');
     this.sweep = this.db.prepare('DELETE FROM receipts WHERE expires <= ?');
     this.sweepRecovery = this.db.prepare('DELETE FROM recovery_objects WHERE expires<=?');
     this.sweepRecovery.run(Date.now());
@@ -61,14 +63,19 @@ export class ReceiptStore {
   }
 
   remember(owner, workspace, kind, id) {
-    this.db.prepare('INSERT OR REPLACE INTO recovery_objects VALUES (?,?,?,?,?)')
+    this.db.prepare('INSERT OR REPLACE INTO recovery_objects(owner,workspace,kind,id,expires) VALUES (?,?,?,?,?)')
       .run(owner, workspace, kind, id, Date.now() + retentionMs);
+  }
+
+  pageDisposition(owner, workspace, id, disposition) {
+    this.db.prepare("UPDATE recovery_objects SET disposition=? WHERE owner=? AND workspace=? AND kind='page' AND id=?")
+      .run(disposition, owner, workspace, id);
   }
 
   recoveryObjects(owner, workspace, after = 0, limit = 50) {
     if (!Number.isSafeInteger(after) || after < 0) throw Object.assign(new Error('invalid_params'), {code:'invalid_params'});
     // ReceiptStore.list has already validated the common limit.
-    const rows = this.db.prepare('SELECT rowid,kind,id FROM recovery_objects WHERE owner=? AND workspace=? AND expires>? AND rowid>? ORDER BY rowid LIMIT ?')
+    const rows = this.db.prepare('SELECT rowid,kind,id,disposition FROM recovery_objects WHERE owner=? AND workspace=? AND expires>? AND rowid>? ORDER BY rowid LIMIT ?')
       .all(owner, workspace, Date.now(), after, limit + 1);
     return {records:rows.slice(0,limit), nextObjectCursor:rows.length > limit ? rows[limit-1].rowid : null};
   }

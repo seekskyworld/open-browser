@@ -3,12 +3,12 @@
 // service workers cannot import the Node ESM runtime.
 export const readCapabilities = Object.freeze([
   'getWorkspace', 'diagnoseOperation', 'getOperation', 'getRecoverySummary',
-  'listOperations', 'listEvents', 'eventCursor', 'waitForEvent',
+  'previewFinish', 'listOperations', 'listEvents', 'eventCursor', 'waitForEvent',
   'listDownloads', 'listOutputs', 'readOutput', 'observe', 'captureVisual',
 ]);
 
 export const desktopCapabilities = Object.freeze([
-  'listUploads', 'grantUpload', 'revokeUpload', 'respondDialog',
+  'offerCurrentTab', 'listUploads', 'grantUpload', 'revokeUpload', 'respondDialog',
   'listDownloads', 'cancelDownload', 'keepDownload', 'visualStatus',
   'diagnoseOperation', 'listWorkspaces', 'getWorkspace', 'takeControl',
   'returnToAgent', 'resolveCredential', 'grantOrigin', 'finishWorkspace',

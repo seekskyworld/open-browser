@@ -8,7 +8,7 @@ strong { font-size: 17px; letter-spacing: -.3px; }
 main { padding: 0 16px 14px; } section, form, details { margin-top: 14px; }
 h2 { font-size: 14px; margin: 0 0 3px; } p { margin: 8px 0; overflow-wrap: anywhere; }
 label { display: block; margin: 8px 0 3px; }
-select, input[type=password] { width: 100%; height: 30px; font: inherit; }
+select, #adoption input, input[type=password] { width: 100%; height: 30px; font: inherit; }
 input[type=password] { padding: 3px 6px; }
 button { font: inherit; border: 1px solid transparent; border-radius: 5px; padding: 4px 10px; background: #176244; color: white; cursor: pointer; }
 button.secondary { background: ButtonFace; color: ButtonText; border-color: color-mix(in srgb, ButtonText 25%, transparent); }

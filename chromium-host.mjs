@@ -53,7 +53,7 @@ export async function chromiumHost(context) {
   };
   let initial = await worker();
   const currentVersion = host => evaluateWorker(host, () => globalThis.openBrowserGroupVersion);
-  if (await currentVersion(initial) !== 11) {
+  if (await currentVersion(initial) !== 12) {
     // A persistent Chromium profile can start the previous cached MV3 worker.
     const replacement = context.waitForEvent('serviceworker', { predicate: isHost, timeout: 10000 });
     try {
@@ -64,7 +64,7 @@ export async function chromiumHost(context) {
       // Chromium can defer the replacement worker until its next profile launch.
       throw Object.assign(new Error('工作区扩展已请求更新', { cause }), { code: 'extension_reload' });
     }
-    if (await currentVersion(initial) !== 11) throw new Error('请重新构建 open-browser 工作区扩展。');
+    if (await currentVersion(initial) !== 12) throw new Error('请重新构建 open-browser 工作区扩展。');
   }
   let stopped = false;
   let lastState;
@@ -167,12 +167,12 @@ export async function chromiumHost(context) {
     setInputGuard,
     onActionTarget(event) { if (!stopped) effects.target(event); },
     onActivity(view) { if (!stopped) { effects.update(view); changed(); } },
-    async groupTab(page, workspaceId, name, mode, agentName, pageId) {
+    async groupTab(page, workspaceId, name, mode, agentName, pageId, controlGeneration, preserveGroup) {
       const session = await context.newCDPSession(page);
       let retained = false;
       try {
         const { targetInfo } = await session.send('Target.getTargetInfo');
-        const args = { targetId: targetInfo.targetId, workspaceId, name, mode, agentName, pageId };
+        const args = { targetId: targetInfo.targetId, workspaceId, name, mode, agentName, pageId, controlGeneration, preserveGroup };
         await evaluateWorker(await worker(), info => globalThis.openBrowserGroup(info), args);
         if (pageId && !effects.has(pageId)) {
           effects.track(page, session, workspaceId, pageId);

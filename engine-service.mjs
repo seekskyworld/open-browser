@@ -1,6 +1,7 @@
-import { close as closeWorkspace, finish, finishDigest, handOff, returnToAgent } from './workspace-lifecycle.mjs';
+import { adoptTab, offerTab } from './tab-adoption.mjs';
+import { close as closeWorkspace, finish, finishDigest, previewFinish, handOff, returnToAgent } from './workspace-lifecycle.mjs';
 import { perform } from './action-execution.mjs';
-import { allowedPageOrigin, clearFrameRefs, clearRefs, fail, publicError, redact, requirePageOrigin, stringParam, webOrigin, workspaceView } from './workspace-state.mjs';
+import { ServiceError, allowedPageOrigin, clearFrameRefs, clearRefs, fail, publicError, redact, requirePageOrigin, stringParam, webOrigin, workspaceView } from './workspace-state.mjs';
 import {workflowRequest,workflowOrigin,performWorkflow} from './site-workflow.mjs';
 import { agentMethods, capabilityProfiles, limits } from './api-contract.mjs';
 import {UploadGrants} from './uploads.mjs';
@@ -97,6 +98,9 @@ export class BrowserService {
   }
 
   notify(ws) {
+    if (ws.mode === 'agent' || ws.mode === 'closed' || ws.finishing) {
+      for (const resume of ws.controlWaiters || []) resume();
+    }
     this.notifier.notify(ws);
   }
 
@@ -179,8 +183,10 @@ export class BrowserService {
       const {records, nextObjectCursor} = this.store.recoveryObjects(clientId, params.workspaceId, params.objectsAfter, params.limit);
       if (!ws && !records.length && !operations.length && !this.store.events(clientId,params.workspaceId,0,1).events.length)
         fail('workspace_not_found');
-      const pages = records.filter(row => row.kind === 'page').map(({id}) => ({
-        pageId:id, next: ws?.pages.has(id) ? 'observe' : 'handle_unavailable'
+      const pages = records.filter(row => row.kind === 'page').map(({id, disposition}) => ({
+        pageId:id, ...(disposition && {lastDisposition:disposition}), next: ws?.pages.has(id) ? 'observe' : 'handle_unavailable',
+        pageAvailability:ws ? (ws.pages.has(id) ? 'managed' : 'closed') : 'unregistered',
+        nextAction:ws?.pages.has(id) ? (ws.mode === 'agent' ? 'reattachPage' : 'wait_for_agent_control') : 'request_tab_selection'
       }));
       return {
         workspaceId:params.workspaceId, mode:ws?.mode ?? 'unavailable', pages,
@@ -196,6 +202,8 @@ export class BrowserService {
     if (method === 'diagnoseOperation') return this.store.diagnose(clientId, params.workspaceId, params.operationId);
     if (method === 'listOperations')
       return this.store.list(clientId, params.workspaceId, params.after, params.limit);
+    if (method === 'getWorkspace' && params.profileId !== undefined && params.profileId !== serviceProfileId)
+      fail('profile_mismatch');
     const ws = this.workspaces.get(params.workspaceId);
     if (!ws || ws.owner !== clientId) {
       if (['listOutputs', 'readOutput'].includes(method)) {
@@ -220,6 +228,39 @@ export class BrowserService {
     if (!statusQueries.has(method)) ws.lastActiveAt = Date.now();
     switch (method) {
       case 'getWorkspace': return workspaceView(ws, true);
+      case 'offerCurrentTab': return offerTab(this, ws, params);
+      case 'adoptCurrentTab': return adoptTab(this, ws, params);
+      case 'canvasSnapshot': return this.enqueue(ws, async () => {
+        const tab = this.tab(ws, params.pageId);
+        const origin = requirePageOrigin(ws, tab), documentId = tab.documentId, controlGeneration = ws.generation;
+        const data = await tab.page.evaluate(inspectDocument, {canvas:true, origins:[origin]});
+        this.requireControl(ws, controlGeneration);
+        if (!data || ws.pages.get(tab.id) !== tab || tab.documentId !== documentId || requirePageOrigin(ws, tab) !== origin)
+          fail('stale_observation');
+        for (const row of [...data.nodes, ...data.edges, ...data.messages, ...data.attachments]) {
+          for (const field of ['id','label','text','source','target']) if (field in row) row[field] = redact(ws, row[field]);
+        }
+        const snapshotVersion = createHash('sha256').update(JSON.stringify([documentId,controlGeneration,data])).digest('hex');
+        return {workspaceId:ws.id,pageId:tab.id,documentId,controlGeneration,snapshotVersion,...data};
+      }, {kind:'canvasSnapshot', pageId:params.pageId});
+      case 'previewFinish': return previewFinish(this, ws, params.keepPageIds);
+      case 'reattachPage': {
+        this.tab(ws, params.pageId);
+        if (params.waitMs && ws.mode !== 'agent') {
+          ws.controlWaiters ??= new Set();
+          if (ws.controlWaiters.size >= 32) fail('queue_full');
+          await new Promise((resolve, reject) => {
+            const resume = () => { clearTimeout(timer); ws.controlWaiters.delete(resume); resolve(); };
+            const timer = setTimeout(() => { ws.controlWaiters.delete(resume); reject(new ServiceError('workspace_under_user_control')); }, params.waitMs);
+            ws.controlWaiters.add(resume);
+          });
+        }
+        return this.enqueue(ws, async () => {
+          const tab = this.tab(ws, params.pageId);
+          if (this.groupTab && tab.syncedGeneration !== ws.generation) await this.syncTab(ws, tab);
+          return this.observe(ws, tab);
+        }, {kind:'observe', pageId:params.pageId});
+      }
       case 'listUploads': return ws.uploads.list();
       case 'grantUpload': {
         if (this.actors.getStore() !== 'desktop') fail('forbidden');
@@ -250,6 +291,7 @@ export class BrowserService {
         }
       case 'visualStatus': return {lastCapture:ws.lastVisualCapture || null};
       case 'grantOrigin': {
+        if (ws.singleTab) fail('single_tab_scope');
         if (params.controlGeneration !== ws.generation || !['agent', 'human'].includes(ws.mode)) fail('stale_control');
         const origin = webOrigin(params.origin);
         if (origin !== params.origin || !['navigation', 'resource'].includes(params.scope)) fail('invalid_params');
@@ -282,6 +324,7 @@ export class BrowserService {
       case 'pageNavigate': return this.desktopNavigate(ws, params, false);
       case 'closePage': {
         const tab = this.tab(ws, params.pageId);
+        if (ws.singleTab) fail('user_owned_page');
         await tab.page.close();
         return { workspaceId: ws.id, pageId: tab.id, closed: true };
       }
@@ -333,7 +376,9 @@ export class BrowserService {
       }
       case 'handOff':
       case 'takeControl': return this.handOff(ws, params.pageId, true, params.controlGeneration);
-      case 'returnToAgent': return this.returnToAgent(ws, params.controlGeneration);
+      case 'returnToAgent':
+        if (params.pageId !== undefined) this.tab(ws, params.pageId);
+        return this.returnToAgent(ws, params.controlGeneration);
       case 'closeWorkspace':
         if (ws.mode !== 'agent') fail('workspace_under_user_control');
         await closeWorkspace(this, ws);
@@ -422,11 +467,26 @@ export class BrowserService {
 
   routeWorkspace(target, ws) { return routeWorkspace(target, ws, !!this.sharedContext); }
 
+  async syncTab(ws, tab) {
+    if (!this.groupTab) return;
+    const generation = ws.generation;
+    try { await this.groupTab(tab.page, ws.id, ws.name, ws.mode, ws.agentName, tab.id, generation, !!ws.singleTab); }
+    catch { fail('sync_pending'); }
+    if (ws.pages.get(tab.id) === tab && ws.generation === generation) {
+      tab.syncedGeneration = generation;
+      tab.syncRevision = (tab.syncRevision || 0) + 1;
+      tab.lastSyncedAt = Date.now();
+      this.notify(ws);
+    }
+  }
+
   register(ws, page) {
+    ws.everRegistered = true;
     const existing = [...ws.pages.values()].find(tab => tab.page === page);
     if (existing) return existing;
     const tab = { id: randomUUID(), page, documentId: randomUUID(), refs:new Map(), frameRefs:new Map(), frameDocuments:new WeakMap(), frameIds:new WeakMap(), cursors:new Map(), frameRevision:0, title: '',
       heldKeys: new Set(), heldButtons: new Set() };
+    tab.extensionSync = !!this.groupTab;
     ws.securityChallenge = null;
     this.store.remember(ws.owner, ws.id, 'page', tab.id);
     ws.pages.set(tab.id, tab);
@@ -472,6 +532,7 @@ export class BrowserService {
       } catch { /* A closing page cannot change the workspace state. */ }
     };
     const closed = () => {
+      this.store.pageDisposition(ws.owner, ws.id, tab.id, page.isClosed() ? 'closed' : 'released');
       releaseDialogs();
       void tab.summarySession?.detach().catch(() => {});
       clearRefs(tab);
@@ -602,6 +663,7 @@ export class BrowserService {
   }
 
   async open(ws, url, job, popup) {
+    if (ws.singleTab) fail('single_tab_scope');
     const origin = webOrigin(url);
     if (!ws.origins.size && !ws.resourceOrigins.has(origin)) ws.origins.add(origin);
     if (!ws.origins.has(origin)) {
@@ -677,7 +739,7 @@ export class BrowserService {
       if (ws.mode === 'agent') await this.setInputGuard?.(ws, tab, true);
       if (job) job.pageId = tab.id;
       this.notify(ws);
-      if (this.sharedContext) await this.groupTab?.(page, ws.id, ws.name, ws.mode, ws.agentName, tab.id);
+      if (this.sharedContext) await this.syncTab(ws, tab);
       let firstRequest;
       if (popup) {
         // Recheck in the actual request handler as well as before goto. A handoff
@@ -1049,6 +1111,7 @@ export class BrowserService {
   }
 
   async desktopNavigate(ws, { pageId, action, url }, newTab) {
+    if (ws.singleTab && (newTab || (url && !ws.origins.has(webOrigin(url))))) fail('single_tab_scope');
     const tab = newTab ? null : this.tab(ws, pageId);
     if (newTab) action = 'go';
     if (!['go', 'back', 'forward', 'reload'].includes(action) ||

@@ -72,6 +72,9 @@ export function workspaceView(ws, includeCredentialRequest = false) {
     const origin = allowedPageOrigin(ws, tab);
     return { workspaceId: ws.id, pageId: tab.id, documentId:tab.documentId, origin: origin || 'null',
       ...(tab.openerPageId && {openerPageId:tab.openerPageId,openedByOperationId:tab.openedByOperationId}),
+      ownership:ws.singleTab ? 'user' : tab.createdByAgent ? 'agent' : 'user',
+      syncState:!tab.extensionSync ? 'not_required' : tab.syncedGeneration === ws.generation ? 'synced' : 'sync_pending',
+      syncRevision:tab.syncRevision || 0, lastSyncedAt:tab.lastSyncedAt || null,
       title: origin ? redact(ws, tab.title) : '' };
   });
   const pending = [...ws.jobs];
@@ -88,6 +91,10 @@ export function workspaceView(ws, includeCredentialRequest = false) {
   else if (request) phase = 'needs_credential';
   else if (recent && recent.error !== 'credential_required') phase = recent.state;
   return { workspaceId: ws.id, profileId: serviceProfileId, name: ws.name, agentName: ws.agentName, mode: ws.mode, controlGeneration: ws.generation, pages,
+    pageAvailability:pages.length ? 'managed' : current?.kind === 'openPage' ? 'sync_pending' : ws.everRegistered ? 'closed' : 'unregistered',
+    scope:ws.singleTab ? 'single_tab' : 'workspace',
+    nextAction:pages.length ? (ws.mode === 'agent' ? 'reattachPage' : 'wait_for_agent_control') : current?.kind === 'openPage' ? 'wait_for_sync' : 'request_tab_selection',
+    ...(ws.accountAlias && {accountAlias:ws.accountAlias}),
     ...(includeCredentialRequest && {pendingDialogs: [...ws.pages.values()].flatMap(tab=>tab.dialog ? [tab.dialog.info] : [])}),
     ...(includeCredentialRequest && { blockedOrigins: [...ws.blockedOrigins.values()] }),
     ...(ws.mode === 'transferring' && ws.unlockPending && {unlockPending:true}),

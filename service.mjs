@@ -211,6 +211,9 @@ export async function startApplication({ headless = false, mode = 'service', onS
       if (!ready) throw Object.assign(new Error('not_ready'), { code: 'not_ready' });
       switch (method) {
         case 'listWorkspaces': return call(method, params);
+        case 'offerCurrentTab':
+          if (registry.hasDelegates(params.workspaceId)) throw Object.assign(new Error(), {code:'adoption_requires_private_workspace'});
+          return call(method, params);
         case 'listAgentHistory': return registry.listHistory(engine, 'local', params);
         case 'getWorkspace': return call(method, params);
         default: return call(method, params);

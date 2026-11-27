@@ -7,6 +7,19 @@ description: 用户要求用 open-browser 浏览、观察页面、操作工作�
 
 在 macOS 和 Linux 使用本 Skill 目录内的 `scripts/open-browser`，在 Windows 使用 `scripts/open-browser.cmd`。便携包中的 Skill 位于 `app/skills/open-browser/`，其启动脚本使用包内 Node。下文以 `$ob` 表示它的绝对路径。命令名是第一个参数，其余参数从标准输入读取 JSON，标准输出也是 JSON。运行 `"$ob" --help` 查看方法。首次调用会探测本机服务，必要时自动启动 open-browser 应用或便携包并等待就绪后重试一次。设置 `OPEN_BROWSER_AUTOSTART=0` 可关闭自动启动。该引导只使用本机 socket 或命名管道，不需要配置 MCP 地址。连续任务可运行 `"$ob" session`，它按行读取 `{\"id\":1,\"method\":\"observe\",\"params\":{...}}`，复用同一个 Node 客户端直到标准输入关闭。
 
+## 选择入口
+
+| 场景 | 调用顺序 |
+| --- | --- |
+| 已登录的 open-browser 普通标签页 | 先用 `createWorkspace` 建立命名任务。请用户在原页打开扩展，选择该任务，点击「让 Agent 操作此页」，将授权框内的 JSON 交给你。在两分钟内原样传给 `adoptCurrentTab`，再用返回的句柄 `observe`。 |
+| 新开页面 | 用 `open` 传任务名和 URL，再 `observe`。 |
+| 用户接管后交回 | 用保存的 workspaceId 和 pageId 调用 `reattachPage`，可传 `waitMs:30000` 等待用户点击「交回 Agent」，交回后自动核对原页并返回新的观察。原页已关闭时请用户重新选择。 |
+| 登录资料或服务发生变化 | 核对工作区的 `profileId`、站点和用户填写的账号别名。服务重启后用 `getRecoverySummary` 查看历史，再请用户在正确资料内重新授权。 |
+
+单页授权绑定当前任务和站点。任务结束时原页自动保留。用 `previewFinish` 核对 `keptPageIds` 和 `closedPageIds`，将返回的 `previewId` 及原选择传入 `finishWorkspace`。遇到 `finish_preview_changed` 时重新预览。
+
+对于 React Flow 画布或带消息角色标记的聊天区，`canvasSnapshot` 返回已渲染的节点、边、消息和下载链接标签。操作后可再读一次核对结果，`snapshotVersion` 随快照内容或控制代次变化。返回 `unsupported` 时使用普通观察或已授权的画面。
+
 ## 最短路径
 
 一次性打开并读取页面时，优先使用 `open`，它会创建工作区、打开明确网址并返回页面句柄。随后把句柄传给 `observe`，再把最新观察中的 `documentId` 和 `controlGeneration` 传给 `act`。任务完成后调用 `finishWorkspace`，将需要交付的页面放进 `keepPageIds`。
