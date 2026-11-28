@@ -1,7 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 
-import { isDevelopmentBuild } from './build-profile.mjs';
 import { managedInput } from './managed-input.mjs';
 import { pageActivity } from './page-activity.mjs';
 import { desktopCapabilities } from './capability-matrix.mjs';
@@ -70,11 +69,10 @@ export async function chromiumHost(context) {
   let lastState;
   const effects = pageActivity();
   const configuredGuard = process.env.OPEN_BROWSER_INPUT_GUARD?.trim().toLowerCase();
-  // Development builds opt into the stock-Chromium fallback so the guard can
-  // be exercised without a Chromium rebuild. Stable builds stay opt-in until
-  // their native Chromium patch is shipped. `off` remains an explicit
+  // All packaged profiles use the page-level fallback unless a Chromium build
+  // provides the native event-aware guard. `off` remains an explicit
   // diagnostics override.
-  const guardMode = configuredGuard || (isDevelopmentBuild ? 'fallback' : 'off');
+  const guardMode = configuredGuard || 'fallback';
   if (!['off', 'fallback', 'native'].includes(guardMode))
     throw extensionError('invalid_input_guard_mode', 'OPEN_BROWSER_INPUT_GUARD 必须是 off、fallback 或 native。');
   const guarded = guardMode !== 'off';

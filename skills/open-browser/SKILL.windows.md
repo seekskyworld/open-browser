@@ -11,7 +11,7 @@ description: 用户要求用 open-browser 浏览、观察页面、操作工作�
 
 工作区进入 `agent` 状态后，受管页面内容区域会锁定人工鼠标、触控板和键盘输入。Agent 每个写入动作结束后立即恢复锁定。地址栏、标签栏和工作区控制条仍可使用。通过页面底部的 **人工接管** 进入人工状态，完成后点击 **交回 Agent**，再重新 `observe`。
 
-`getWorkspace.security.inputGuard` 会报告 `native` 或 `fallback`。没有 Chromium 输入补丁时使用受管页面捕获层。Dev 构建默认启用保护，只有明确设置 `OPEN_BROWSER_INPUT_GUARD=off` 才关闭。
+`getWorkspace.security.inputGuard` 会报告 `native` 或 `fallback`。没有 Chromium 输入补丁时使用受管页面捕获层。发行包默认启用保护，只有明确设置 `OPEN_BROWSER_INPUT_GUARD=off` 才关闭。
 
 ## 选择入口
 
