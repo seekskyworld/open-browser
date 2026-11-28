@@ -43,6 +43,9 @@ async function main() {
   const dmgArg = process.argv.indexOf('--dmg');
   const zip = zipArg >= 0 ? process.argv[zipArg + 1] : process.env.OPEN_BROWSER_NOTARY_ZIP || path.join(path.dirname(app), `open-browser-macos-${appArch}.zip`);
   const dmg = dmgArg >= 0 ? process.argv[dmgArg + 1] : process.env.OPEN_BROWSER_NOTARY_DMG || path.join(path.dirname(app), `open-browser-macos-${appArch}.dmg`);
+  run('/usr/bin/codesign', ['--verify', '--strict', dmg]);
+  run(stapler, stapler === '/usr/bin/xcrun' ? ['stapler', 'validate', dmg] : ['validate', dmg]);
+  run(commandPath('spctl', '/usr/sbin/spctl'), ['--assess', '--type', 'open', '--context', 'context:primary-signature', '--verbose=4', dmg]);
   for (const [kind, file] of [['ZIP', zip], ['DMG', dmg]]) {
     try {
       await access(file);

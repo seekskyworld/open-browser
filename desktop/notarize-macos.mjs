@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { access, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { signingIdentity } from './sign.mjs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -134,12 +135,22 @@ async function main() {
 
   run('/usr/bin/ditto', ['-c', '-k', '--keepParent', '--sequesterRsrc', parsed.app, parsed.zip]);
   const credentials = notaryCredentials();
-  run(notarytool, notarytool === '/usr/bin/xcrun'
-    ? ['notarytool', 'submit', parsed.zip, '--wait', ...credentials]
-    : ['submit', parsed.zip, '--wait', ...credentials]);
-
-  run(stapler, stapler === '/usr/bin/xcrun' ? ['stapler', 'staple', parsed.app] : ['staple', parsed.app]);
-  run(stapler, stapler === '/usr/bin/xcrun' ? ['stapler', 'validate', parsed.app] : ['validate', parsed.app]);
+  function submitAndStaple(archive, target) {
+    const prefix = notarytool === '/usr/bin/xcrun' ? ['notarytool'] : [];
+    const args = [...prefix, 'submit', archive, '--wait', '--output-format', 'json', ...credentials];
+    let result;
+    try {
+      result = JSON.parse(execFileSync(notarytool, args, { encoding: 'utf8' }));
+    } catch {
+      throw new Error('Apple 公证提交失败：' + path.basename(archive));
+    }
+    console.log(path.basename(archive), result.id, result.status);
+    if (result.status !== 'Accepted') throw new Error('Apple 未接受这次公证提交。');
+    const staplePrefix = stapler === '/usr/bin/xcrun' ? ['stapler'] : [];
+    run(stapler, [...staplePrefix, 'staple', target]);
+    run(stapler, [...staplePrefix, 'validate', target]);
+  }
+  submitAndStaple(parsed.zip, parsed.app);
   run(spctl, ['--assess', '--type', 'execute', '--verbose=4', parsed.app]);
 
   // The first archive is the notarization input. Recreate it after stapling so
@@ -158,6 +169,9 @@ async function main() {
         'create', '-volname', `open-browser ${path.basename(parsed.app, '.app')}`,
         '-srcfolder', volume, '-ov', '-format', 'UDZO', parsed.dmg,
       ]);
+      run('/usr/bin/codesign', ['--sign', signingIdentity(), '--timestamp', parsed.dmg]);
+      submitAndStaple(parsed.dmg, parsed.dmg);
+      run(spctl, ['--assess', '--type', 'open', '--context', 'context:primary-signature', '--verbose=4', parsed.dmg]);
       const dmgDigest = await sha256(parsed.dmg);
       await writeFile(parsed.dmg + '.sha256', `${dmgDigest}  ${path.basename(parsed.dmg)}\n`);
       console.log(`${parsed.dmg}\nSHA-256 ${dmgDigest}`);
