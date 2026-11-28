@@ -5,7 +5,7 @@ import { OpenBrowserClient, OpenBrowserError } from './sdk.mjs';
 import { tools } from './api-contract.mjs';
 
 export function createMcpServer() {
-  const server = new Server({ name: 'open-browser', version: '0.1.0' }, { capabilities: { tools: {} } });
+  const server = new Server({ name: 'open-browser', version: '0.2.0' }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
   server.setRequestHandler(CallToolRequestSchema, async ({ params }) => {
     let args;
