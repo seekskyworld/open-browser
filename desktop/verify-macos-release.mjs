@@ -21,7 +21,7 @@ function run(command, args) {
 
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
-    console.log('用法：node desktop/verify-macos-release.mjs [app-path]');
+    console.log('用法：node desktop/verify-macos-release.mjs [app-path] [--zip zip-path] [--dmg dmg-path]');
     return;
   }
   if (process.platform !== 'darwin') throw new Error('macOS 发行验收只能在 macOS 执行。');
@@ -39,18 +39,23 @@ async function main() {
   run(commandPath('spctl', '/usr/sbin/spctl'), ['--assess', '--type', 'execute', '--verbose=4', app]);
 
   const appArch = app.endsWith('-x64.app') ? 'x64' : app.endsWith('-arm64.app') ? 'arm64' : process.env.OPEN_BROWSER_TARGET_ARCH || process.arch;
-  const zip = process.env.OPEN_BROWSER_NOTARY_ZIP || path.join(path.dirname(app), `open-browser-macos-${appArch}.zip`);
-  try {
-    await access(zip);
-    const checksumFile = zip + '.sha256';
-    await access(checksumFile);
-    const expected = (await readFile(checksumFile, 'utf8')).trim().split(/\s+/)[0];
-    const actual = createHash('sha256').update(await readFile(zip)).digest('hex');
-    if (expected !== actual) throw new Error(`ZIP SHA-256 不匹配：${zip}`);
-    console.log(`${zip}\nSHA-256 ${actual}`);
-  } catch (error) {
-    if (error?.code === 'ENOENT') throw new Error(`缺少已固化票据的 ZIP 或校验和：${zip}`);
-    throw error;
+  const zipArg = process.argv.indexOf('--zip');
+  const dmgArg = process.argv.indexOf('--dmg');
+  const zip = zipArg >= 0 ? process.argv[zipArg + 1] : process.env.OPEN_BROWSER_NOTARY_ZIP || path.join(path.dirname(app), `open-browser-macos-${appArch}.zip`);
+  const dmg = dmgArg >= 0 ? process.argv[dmgArg + 1] : process.env.OPEN_BROWSER_NOTARY_DMG || path.join(path.dirname(app), `open-browser-macos-${appArch}.dmg`);
+  for (const [kind, file] of [['ZIP', zip], ['DMG', dmg]]) {
+    try {
+      await access(file);
+      const checksumFile = file + '.sha256';
+      await access(checksumFile);
+      const expected = (await readFile(checksumFile, 'utf8')).trim().split(/\s+/)[0];
+      const actual = createHash('sha256').update(await readFile(file)).digest('hex');
+      if (expected !== actual) throw new Error(`${kind} SHA-256 不匹配：${file}`);
+      console.log(`${file}\nSHA-256 ${actual}`);
+    } catch (error) {
+      if (error?.code === 'ENOENT') throw new Error(`缺少已公证的 ${kind} 或校验和：${file}`);
+      throw error;
+    }
   }
   console.log(`macOS 发行验收通过：${app}`);
 }

@@ -30,8 +30,8 @@ export async function engineExecutable() {
 }
 
 async function install() {
-  if (process.platform === 'darwin' && targetArch !== process.arch)
-    throw new Error(`当前 Node 是 ${process.arch}，不能下载并登记 ${targetArch} 引擎。请在对应架构的 macOS 或 Rosetta x64 Node 下运行。`);
+  if (process.platform === 'darwin' && targetArch() !== process.arch)
+    throw new Error(`当前 Node 是 ${process.arch}，不能下载并登记 ${targetArch()} 引擎。请在对应架构的 macOS 或 Rosetta x64 Node 下运行。`);
   process.env.PLAYWRIGHT_BROWSERS_PATH = engineDir;
   const cli = path.join(path.dirname(require.resolve('playwright-core/package.json')), 'cli.js');
   execFileSync(process.execPath, [cli, 'install', 'chromium', '--no-shell'], { stdio: 'inherit' });

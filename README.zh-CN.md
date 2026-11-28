@@ -37,7 +37,7 @@ npm run browser:install
 node --test service.integration.test.mjs
 ```
 
-**打开稳定桌面浏览器**，运行 `npm start`。开发构建使用 `npm run start:dev`，它会隔离开发状态目录、PID、socket、回执和 macOS 应用标识。macOS 首次启动会构建签名应用，需要 Xcode 命令行工具和 Developer ID Application 证书。公开发布 GitHub ZIP 时，配置 notarytool 钥匙串配置或 CI 凭据，运行 `npm run build:release-macos`，再运行 `npm run release:verify-macos`。Windows、Linux 支持从源码启动和 x64 便携包。仅需无头服务时运行 `node service.mjs --headless`。[各平台构建、系统依赖与校验](Docs/跨平台试用与发行.md)
+**打开稳定桌面浏览器**，运行 `npm start`。开发构建使用 `npm run start:dev`，它会隔离开发状态目录、PID、socket、回执和 macOS 应用标识。macOS 首次启动会构建签名应用，需要 Xcode 命令行工具和 Developer ID Application 证书。公开发布 GitHub DMG 和 ZIP 时，配置 notarytool 钥匙串配置或 CI 凭据，运行 `npm run build:release-macos:arm64` 或 `npm run build:release-macos:x64`，再运行 `npm run release:verify-macos`。Windows、Linux 支持从源码启动和 x64 便携包。仅需无头服务时运行 `node service.mjs --headless`。[各平台构建、系统依赖与校验](Docs/跨平台试用与发行.md)
 
 本地生成可安装的 macOS 默认包可运行 `npm run package:macos`，它会同时生成 `.app`、ZIP 和带 `Applications` 快捷方式的 DMG。只需要 DMG 时运行 `npm run package:macos:dmg`。Windows、Linux 包分别使用 `npm run package:windows:x64` 和 `npm run package:linux:x64`。
 

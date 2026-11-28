@@ -45,6 +45,15 @@ function signCode(path, identity, preserveEntitlements = false) {
   }
 }
 
+function signDeep(bundle, identity, preserveEntitlements = false) {
+  const timestamp = process.env.OPEN_BROWSER_CODESIGN_TIMESTAMP === 'none'
+    ? '--timestamp=none'
+    : '--timestamp';
+  const args = ['--deep', '--force', timestamp, '--options', 'runtime', '--entitlements', entitlements, '--sign', identity];
+  if (preserveEntitlements) args.push('--preserve-metadata=entitlements');
+  execFileSync('/usr/bin/codesign', [...args, bundle], { stdio: 'inherit' });
+}
+
 export function signingIdentity(requested = process.env.OPEN_BROWSER_SIGN_IDENTITY || process.env.APPLE_SIGNING_IDENTITY) {
   const listing = execFileSync('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
   const identities = [...listing.matchAll(/^\s*\d+\) ([0-9A-F]{40}) "([^"]+)"\s*$/gm)];
@@ -58,8 +67,14 @@ export function signingIdentity(requested = process.env.OPEN_BROWSER_SIGN_IDENTI
 }
 
 export function signBundle(bundle, identity, nested = false) {
-  for (const path of nestedCodePaths(bundle)) signCode(path, identity);
-  signCode(bundle, identity, nested);
+  try {
+    for (const path of nestedCodePaths(bundle)) signCode(path, identity);
+    signCode(bundle, identity, nested);
+  } catch (error) {
+    // Some Chromium x64 helper layouts reject an individual parent signature
+    // until every nested code object is rewritten as one deep operation.
+    signDeep(bundle, identity, nested);
+  }
   execFileSync('/usr/bin/codesign', ['--verify', '--strict', '--deep', bundle], { stdio: 'inherit' });
 }
 

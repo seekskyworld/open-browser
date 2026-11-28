@@ -11,6 +11,7 @@ import { isDevelopmentBuild } from '../build-profile.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const archOption = process.argv.findIndex(value => value === '--arch');
 const requestedArch = archOption >= 0 ? process.argv[archOption + 1] : process.env.OPEN_BROWSER_TARGET_ARCH || process.arch;
+const compilerArch = requestedArch === 'x64' ? 'x86_64' : requestedArch;
 const sums = {
   arm64: 'e7131995759b61a0170b646010d2ad35a5d37b4cb0d471f3e8317eac6f742f3d',
   x64: 'c53383238206b9ae4db23c5d8a63645e2e753bec8ab51a49cc81939aa64e9422',
@@ -58,7 +59,7 @@ try {
     execFileSync('plutil', ['-replace', 'CFBundleName', '-string', 'open-browser Dev', outerInfo]);
     execFileSync('plutil', ['-replace', 'CFBundleDisplayName', '-string', 'open-browser Dev', outerInfo]);
   }
-  execFileSync('xcrun', ['clang', '-arch', requestedArch, '-fobjc-arc', '-O2', '-framework', 'AppKit', '-framework', 'CoreGraphics',
+  execFileSync('xcrun', ['clang', '-arch', compilerArch, '-fobjc-arc', '-O2', '-framework', 'AppKit', '-framework', 'CoreGraphics',
     path.join(root, 'desktop/Launcher.m'), path.join(root, 'desktop/OBControlBar.m'),
     '-o', path.join(contents, 'MacOS/open-browser')], { stdio: 'inherit' });
   await copyFile(path.join(root, 'desktop/icons/open-browser.icns'), path.join(resources, 'open-browser.icns'));

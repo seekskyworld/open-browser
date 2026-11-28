@@ -37,7 +37,7 @@ To try the control API, run the integration test. It starts a temporary local se
 node --test service.integration.test.mjs
 ```
 
-To open the stable desktop browser, run `npm start`. Use `npm run start:dev` for an isolated development build with separate state, PID, socket, receipts and macOS app identity. The first macOS desktop build requires Xcode command line tools and a Developer ID Application certificate. If you already have a build, open `dist/open-browser.app`. For a public GitHub ZIP, set a notarytool profile or CI credentials and run `npm run build:release-macos`, then run `npm run release:verify-macos`. Windows and Linux support running from source and x64 portable builds. For a headless service, run `node service.mjs --headless`. [Platform prerequisites and packaging](Docs/跨平台试用与发行.md)
+To open the stable desktop browser, run `npm start`. Use `npm run start:dev` for an isolated development build with separate state, PID, socket, receipts and macOS app identity. The first macOS desktop build requires Xcode command line tools and a Developer ID Application certificate. If you already have a build, open `dist/open-browser.app`. For public GitHub DMG and ZIP releases, set a notarytool profile or CI credentials and run `npm run build:release-macos:arm64` or `npm run build:release-macos:x64`, then run `npm run release:verify-macos`. Windows and Linux support running from source and x64 portable builds. For a headless service, run `node service.mjs --headless`. [Platform prerequisites and packaging](Docs/跨平台试用与发行.md)
 
 ## Try a handoff
 

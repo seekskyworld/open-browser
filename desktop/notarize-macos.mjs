@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,9 +8,9 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const defaultApp = path.join(root, 'dist', 'open-browser.app');
 
 function usage() {
-  console.log(`用法：node desktop/notarize-macos.mjs [app-path] [--zip zip-path]
+  console.log(`用法：node desktop/notarize-macos.mjs [app-path] [--zip zip-path] [--dmg dmg-path]
 
-提交并公证 macOS 应用，固化票据后生成可上传的 GitHub ZIP。
+提交并公证 macOS 应用，固化票据后生成可上传的 GitHub ZIP 和可选 DMG。
 凭据优先使用 OPEN_BROWSER_NOTARY_PROFILE，其次使用 App Store Connect API Key，
 最后使用 Apple ID 加应用专用密码。凭据只从环境变量或本机钥匙串读取。`);
 }
@@ -18,12 +18,18 @@ function usage() {
 function parseArgs(argv) {
   let app = process.env.OPEN_BROWSER_APP_PATH || defaultApp;
   let zip = process.env.OPEN_BROWSER_NOTARY_ZIP;
+  let dmg = process.env.OPEN_BROWSER_NOTARY_DMG;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--help' || value === '-h') return { help: true };
     if (value === '--zip') {
       zip = argv[++index];
       if (!zip) throw new Error('--zip 需要文件路径。');
+      continue;
+    }
+    if (value === '--dmg') {
+      dmg = argv[++index];
+      if (!dmg) throw new Error('--dmg 需要文件路径。');
       continue;
     }
     if (value.startsWith('--')) throw new Error('未知参数：' + value);
@@ -33,7 +39,12 @@ function parseArgs(argv) {
   }
   const appArch = app.endsWith('-x64.app') ? 'x64' : app.endsWith('-arm64.app') ? 'arm64' : process.arch;
   if (!zip) zip = path.join(path.dirname(app), `open-browser-macos-${appArch}.zip`);
-  return { app: path.resolve(app), zip: path.resolve(zip), help: false };
+  return {
+    app: path.resolve(app),
+    zip: path.resolve(zip),
+    dmg: dmg ? path.resolve(dmg) : undefined,
+    help: false,
+  };
 }
 
 function run(command, args, options = {}) {
@@ -136,6 +147,24 @@ async function main() {
   run('/usr/bin/ditto', ['-c', '-k', '--keepParent', '--sequesterRsrc', parsed.app, parsed.zip]);
   const digest = await sha256(parsed.zip);
   await writeFile(parsed.zip + '.sha256', `${digest}  ${path.basename(parsed.zip)}\n`);
+  if (parsed.dmg) {
+    const staging = await mkdtemp(path.join(root, 'dist', '.open-browser-notary-dmg-'));
+    const volume = path.join(staging, `open-browser ${path.basename(parsed.app, '.app')}`);
+    try {
+      await mkdir(volume, { recursive: true });
+      run('/usr/bin/ditto', [parsed.app, path.join(volume, path.basename(parsed.app))]);
+      run('/bin/ln', ['-s', '/Applications', path.join(volume, 'Applications')]);
+      run('/usr/bin/hdiutil', [
+        'create', '-volname', `open-browser ${path.basename(parsed.app, '.app')}`,
+        '-srcfolder', volume, '-ov', '-format', 'UDZO', parsed.dmg,
+      ]);
+      const dmgDigest = await sha256(parsed.dmg);
+      await writeFile(parsed.dmg + '.sha256', `${dmgDigest}  ${path.basename(parsed.dmg)}\n`);
+      console.log(`${parsed.dmg}\nSHA-256 ${dmgDigest}`);
+    } finally {
+      await rm(staging, { recursive: true, force: true });
+    }
+  }
   console.log(`${parsed.zip}\nSHA-256 ${digest}`);
 }
 
